@@ -1,5 +1,6 @@
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
-const Teacher = require('../models/Teacher')
+const Teacher = require('../models/Teacher');
+const SchoolConfig = require('../models/SchoolConfig');
 
 module.exports = function(passport) {
     passport.use(
@@ -13,10 +14,11 @@ module.exports = function(passport) {
                 const {id, emails, name} = Profiler;
                 const email = emails[0].value;
                 
-                //check for correct user aka part of org
-                if(!email.endsWith('@coderva.org')){
+                // Check domain restriction if configured by admin
+                const allowedDomain = await SchoolConfig.getConfig('allowed_email_domain');
+                if (allowedDomain && !email.endsWith(allowedDomain)) {
                     return done(null, false, {
-                        message: 'Only CodeRVA emails can be used to access'
+                        message: `Only ${allowedDomain} emails can be used to access`
                     });
                 }
 

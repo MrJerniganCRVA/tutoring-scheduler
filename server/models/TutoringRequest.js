@@ -2,60 +2,48 @@ const { DataTypes } = require('sequelize');
 const sequelize = require('../config/db');
 const Teacher = require('./Teacher');
 const Student = require('./Student');
+const TutoringSlot = require('./TutoringSlot');
 
 const TutoringRequest = sequelize.define('TutoringRequest', {
   date: {
     type: DataTypes.DATEONLY,
     allowNull: false
   },
-  lunchA: {
-    type: DataTypes.BOOLEAN,
-    defaultValue: false
-  },
-  lunchB: {
-    type: DataTypes.BOOLEAN,
-    defaultValue: false
-  },
-  lunchC: {
-    type: DataTypes.BOOLEAN,
-    defaultValue: false
-  },
-  lunchD: {
-    type: DataTypes.BOOLEAN,
-    defaultValue: false
-  },
   status: {
-    type: DataTypes.ENUM('active','cancelled', 'conflict'),
+    type: DataTypes.ENUM('active', 'cancelled', 'conflict'),
     defaultValue: 'active'
   },
-  requestedAt :{
+  requestedAt: {
     type: DataTypes.DATE,
     defaultValue: DataTypes.NOW
   },
-  priority:{
+  priority: {
     type: DataTypes.INTEGER,
     defaultValue: 0
   },
-  conflictReason:{
+  conflictReason: {
     type: DataTypes.STRING,
     allowNull: true
   },
-  calendar_event_id:{
-    type:DataTypes.STRING,
+  calendar_event_id: {
+    type: DataTypes.STRING,
     allowNull: true
   },
-  invite_sent:{
+  invite_sent: {
     type: DataTypes.BOOLEAN,
-    defaultValue:false
+    defaultValue: false
   },
-  invite_sent_at:{
-    type:DataTypes.DATE,
-    allowNull:true
+  invite_sent_at: {
+    type: DataTypes.DATE,
+    allowNull: true
   }
 });
 
-// Define associations
 TutoringRequest.belongsTo(Teacher);
 TutoringRequest.belongsTo(Student);
+
+// A tutoring request covers one or more TutoringSlots
+TutoringRequest.belongsToMany(TutoringSlot, { through: 'TutoringRequestSlots' });
+TutoringSlot.belongsToMany(TutoringRequest, { through: 'TutoringRequestSlots' });
 
 module.exports = TutoringRequest;

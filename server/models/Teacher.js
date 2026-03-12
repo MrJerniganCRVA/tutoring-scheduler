@@ -1,5 +1,6 @@
 const { DataTypes } = require('sequelize');
 const sequelize = require('../config/db');
+const TutoringSlot = require('./TutoringSlot');
 
 const Teacher = sequelize.define('Teacher', {
   id: {
@@ -8,7 +9,7 @@ const Teacher = sequelize.define('Teacher', {
     allowNull: false
   },
   first_name: {
-    type:DataTypes.STRING,
+    type: DataTypes.STRING,
     allowNull: false
   },
   last_name: {
@@ -23,35 +24,33 @@ const Teacher = sequelize.define('Teacher', {
   subject: {
     type: DataTypes.STRING,
     allowNull: false
-  },lunch:{
-    type:DataTypes.STRING,
-    allowNull:true,
-    validate: {
-      isIn: [['A','B','C','D']]
-    }
   },
-  google_id:{
+  google_id: {
     type: DataTypes.STRING,
     allowNull: true,
     unique: true
   },
-  access_token:{
-    type:DataTypes.TEXT,
-    allowNull:true
+  access_token: {
+    type: DataTypes.TEXT,
+    allowNull: true
   },
-  refresh_token:{
-    type:DataTypes.TEXT,
-    allowNull:true
+  refresh_token: {
+    type: DataTypes.TEXT,
+    allowNull: true
   },
-  token_expiry:{
-    type:DataTypes.DATE,
-    allowNull:true
+  token_expiry: {
+    type: DataTypes.DATE,
+    allowNull: true
   },
-  is_admin:{
-    type:DataTypes.BOOLEAN,
-    allowNull:false,
-    defaultValue:false
+  is_admin: {
+    type: DataTypes.BOOLEAN,
+    allowNull: false,
+    defaultValue: false
   }
 });
+
+// A teacher is available during one or more TutoringSlots
+Teacher.belongsToMany(TutoringSlot, { through: 'TeacherTutoringSlots' });
+TutoringSlot.belongsToMany(Teacher, { through: 'TeacherTutoringSlots' });
 
 module.exports = Teacher;

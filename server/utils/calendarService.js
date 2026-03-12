@@ -60,11 +60,11 @@ async function upsertCalendarEvent(teacherId, eventDetails, existingEventId = nu
     description: eventDetails.description,
     start: {
       dateTime: eventDetails.startDateTime,
-      timeZone: 'America/New_York',
+      timeZone: eventDetails.timezone || 'UTC',
     },
     end: {
       dateTime: eventDetails.endDateTime,
-      timeZone: 'America/New_York',
+      timeZone: eventDetails.timezone || 'UTC',
     },
     attendees: eventDetails.attendees,
     reminders: {

@@ -196,16 +196,13 @@ router.get('/:teacherId', async (req, res)=>{
             topStudents: topStudentsFormatted,
             dayOfWeekData
         };
-        //School stats - 
-        const subjectBreakdown = {
-            'CS':0,
-            'Math':0,
-            'Science':0,
-            'Humanities':0
-        };
+        //School stats — derive subject breakdown dynamically from DB
+        const subjectBreakdown = {};
         allRequests.forEach(row => {
             const subject = row['Teacher.subject'];
-            subjectBreakdown[subject]++;
+            if (subject) {
+                subjectBreakdown[subject] = (subjectBreakdown[subject] || 0) + 1;
+            }
         });
         const schoolStats ={
             subjectBreakdown

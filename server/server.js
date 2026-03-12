@@ -58,18 +58,19 @@ require('./config/passport')(passport);
 
 // Simple test route
 app.get('/', (req, res) => {
-  res.json({ msg: 'Welcome to the RR Tutoring Scheduler API' });
+  res.json({ msg: 'Welcome to the Tutoring Scheduler API' });
 });
-//Auth Routes
+
+// Auth Routes
 app.use('/auth', require('./routes/auth'));
 
-
-// Define routes
+// API Routes
 app.use('/api/analytics', require('./routes/analytics'));
 app.use('/api/teachers', require('./routes/teachers'));
 app.use('/api/students', require('./routes/students'));
 app.use('/api/tutoring', require('./routes/tutoring'));
 app.use('/api/calendar', require('./routes/calendar'));
+app.use('/api/admin', require('./routes/admin'));
 
 
 if(runMigration){

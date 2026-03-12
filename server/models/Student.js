@@ -1,6 +1,6 @@
 const { DataTypes } = require('sequelize');
 const sequelize = require('../config/db');
-const Teacher = require('./Teacher');
+const TutoringSlot = require('./TutoringSlot');
 
 const Student = sequelize.define('Student', {
   id: {
@@ -9,7 +9,7 @@ const Student = sequelize.define('Student', {
     allowNull: false
   },
   first_name: {
-    type:DataTypes.STRING,
+    type: DataTypes.STRING,
     allowNull: false
   },
   last_name: {
@@ -17,19 +17,16 @@ const Student = sequelize.define('Student', {
     allowNull: false
   },
   email: {
-    type:DataTypes.STRING,
-    allowNull:false,
+    type: DataTypes.STRING,
+    allowNull: false,
     validate: {
-      isEmail:true
+      isEmail: true
     }
   }
 });
 
-// Define associations after the model is defined
-Student.belongsTo(Teacher, { as: 'R1', foreignKey: 'R1Id' });
-Student.belongsTo(Teacher, { as: 'R2', foreignKey: 'R2Id' });
-Student.belongsTo(Teacher, { as: 'RR', foreignKey: 'RRId' });
-Student.belongsTo(Teacher, { as: 'R4', foreignKey: 'R4Id' });
-Student.belongsTo(Teacher, { as: 'R5', foreignKey: 'R5Id' });
+// A student is available during one or more TutoringSlots
+Student.belongsToMany(TutoringSlot, { through: 'StudentTutoringSlots' });
+TutoringSlot.belongsToMany(Student, { through: 'StudentTutoringSlots' });
 
 module.exports = Student;

@@ -3,10 +3,6 @@ import {
   Box,
   Paper,
   Typography,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
   TextField,
   Button,
   FormGroup,
@@ -27,189 +23,142 @@ import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { format } from 'date-fns';
 import apiService from '../utils/apiService';
-import {useTutoring} from '../contexts/TutoringContext.js'
+import {useTutoring} from '../contexts/TutoringContext.js';
 
-// Icons
 import AddIcon from '@mui/icons-material/Add';
 import RemoveIcon from '@mui/icons-material/Remove';
 import PersonIcon from '@mui/icons-material/Person';
 
 const BulkTutoring = () => {
-  // State for form fields
   const {createSession} = useTutoring();
   const [selectedDate, setSelectedDate] = useState(null);
-  const [lunches, setLunches] = useState({
-    A: false,
-    B: false,
-    C: false,
-    D: false
-  });
-  
-  // State for students management
+  const [slots, setSlots] = useState([]);
+  const [selectedSlotIds, setSelectedSlotIds] = useState(new Set());
+  const [noTutoringDays, setNoTutoringDays] = useState([0, 6]);
+
   const [allStudents, setAllStudents] = useState([]);
   const [myStudents, setMyStudents] = useState([]);
   const [showAllStudents, setShowAllStudents] = useState(false);
   const [selectedStudents, setSelectedStudents] = useState([]);
   const [selectedStudentId, setSelectedStudentId] = useState('');
-  // const [studentFilter, setStudentFilter] = useState('');
-  
-  // State for API interactions
+
   const [loading, setLoading] = useState(false);
   const [fetchingStudents, setFetchingStudents] = useState(true);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [results, setResults] = useState([]);
-  
-  // Get the logged in teacher
+
   const teacherId = localStorage.getItem('teacherId');
 
-  // Load all students when component mounts
   useEffect(() => {
-    // Fetch all students from API
-  const fetchStudents = async () => {
-           try {
-             setFetchingStudents(true);
-             const response = await apiService.getStudents();
-             const processStudent = (student) => {
-               let lunchPeriod = null;
-               if(student.teachers && student.teachers.RR && student.teachers.RR.lunch){
-                 lunchPeriod = student.teachers.RR.lunch;
-               } else if (student.RR && student.RR.lunch){
-                 lunchPeriod = student.RR.lunch;
-               } else if (student.lunchPeriod){
-                 lunchPeriod = student.lunchPeriod;
-               } else if (student.lunch){
-                 lunchPeriod = student.lunch;
-               }
-               const fullName = `${student.first_name} ${student.last_name}`;
-               return {
-                 ...student,
-                 lunchPeriod,
-                 displayName: lunchPeriod ? `[${lunchPeriod}] ${fullName}` : fullName
-               };
-             };
-             const processedAll = response.data.map(processStudent);
-             const processedMy = response.data
-               .filter(student =>
-                 student?.R1Id===parseInt(teacherId) ||
-                 student?.R2Id===parseInt(teacherId) ||
-                 student?.R4Id===parseInt(teacherId) ||
-                 student?.R5Id===parseInt(teacherId)
-               )
-               .map(processStudent);
-             setAllStudents(processedAll);
-             setMyStudents(processedMy);
-             setFetchingStudents(false);
-           } catch (err) {
-             console.error('Error fetching students:', err);
-             setError(apiService.formatError(err));
-             setFetchingStudents(false);
-           }
-         };
+    // Fetch tutoring slots and schedule config in parallel with students
+    apiService.getTutoringSlots()
+      .then(res => setSlots(res.data))
+      .catch(err => console.error('Error fetching slots:', err));
+
+    apiService.getScheduleConfig()
+      .then(res => setNoTutoringDays(res.data.no_tutoring_days || [0, 6]))
+      .catch(err => console.error('Error fetching schedule config:', err));
+
+    const fetchStudents = async () => {
+      try {
+        setFetchingStudents(true);
+        const response = await apiService.getStudents();
+
+        const processStudent = (student) => {
+          const slotNames = student.TutoringSlots?.map(s => s.name).join(', ') || null;
+          const fullName = `${student.first_name} ${student.last_name}`;
+          return {
+            ...student,
+            slotNames,
+            displayName: slotNames ? `${fullName} [${slotNames}]` : fullName
+          };
+        };
+
+        const processedAll = response.data.map(processStudent);
+        const processedMy = response.data
+          .filter(student =>
+            student.StudentPeriodAssignments?.some(
+              a => a.TeacherId === parseInt(teacherId)
+            )
+          )
+          .map(processStudent);
+
+        setAllStudents(processedAll);
+        setMyStudents(processedMy);
+      } catch (err) {
+        console.error('Error fetching students:', err);
+        setError(apiService.formatError(err));
+      } finally {
+        setFetchingStudents(false);
+      }
+    };
+
     fetchStudents();
   }, [teacherId]);
 
-//   // Filter students when search term changes
-//   const filteredStudents = allStudents.filter(student => {
-//     const fullName = `${student.first_name} ${student.last_name}`.toLowerCase();
-//     return fullName.includes(studentFilter.toLowerCase());
-// });
-  
-  // Handler for lunch checkbox changes
-  const handleLunchChange = (event) => {
-    setLunches({
-      ...lunches,
-      [event.target.name]: event.target.checked
+  const handleSlotChange = (slotId, checked) => {
+    setSelectedSlotIds(prev => {
+      const next = new Set(prev);
+      if (checked) next.add(slotId);
+      else next.delete(slotId);
+      return next;
     });
   };
-  
-  // Handler for adding a student to the selected list
+
   const handleAddStudent = () => {
     if (!selectedStudentId) return;
-    
-    // Find the student from all students
     const studentToAdd = allStudents.find(s => s.id === selectedStudentId);
-    
-    // Check if student is already selected
     if (selectedStudents.some(s => s.id === selectedStudentId)) {
-      const studentName = `${studentToAdd.first_name} ${studentToAdd.last_name}`;
-      setError(`${studentName} is already in your selection.`);
+      setError(`${studentToAdd.first_name} ${studentToAdd.last_name} is already in your selection.`);
       return;
     }
-    
-    // Add to selected students
     setSelectedStudents([...selectedStudents, studentToAdd]);
-    
-    //Clear out any lunches that have been selected
-    if (studentToAdd.lunchPeriod){
-      setLunches(prevLunches =>({
-        ...prevLunches,
-        [studentToAdd.lunchPeriod]: false
-      }));
-    }
-    // Reset selection
     setSelectedStudentId('');
     setError('');
   };
-  
-  // Handler for removing a student from the selected list
+
   const handleRemoveStudent = (studentId) => {
     setSelectedStudents(selectedStudents.filter(s => s.id !== studentId));
   };
-  
-  // Check if the form is valid for submission
-  const isFormValid = () => {
-    // Need a date
-    if (!selectedDate) return false;
-    
-    // Need at least one lunch period
-    if (!Object.values(lunches).some(v => v)) return false;
-    
-    // Need at least one student
-    if (selectedStudents.length === 0) return false;
-    
-    return true;
-  };
-  
-  // Handler for form submission
+
+  const isFormValid = () =>
+    !!selectedDate && selectedSlotIds.size > 0 && selectedStudents.length > 0;
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
-    // Reset messages
     setError('');
     setSuccess('');
     setResults([]);
-    
-    // Validate form
+
     if (!isFormValid()) {
-      setError('Please select a date, at least one lunch period, and at least one student.');
+      setError('Please select a date, at least one tutoring slot, and at least one student.');
       return;
     }
-    
+
     setLoading(true);
-    
+
     try {
-      // Process each student as a separate request
       const successfulStudents = [];
       const failedStudents = [];
-      
+
       for (const student of selectedStudents) {
         try {
           const dateObject = new Date(selectedDate.toISOString().split('T')[0]);
           const formData = {
             studentId: student.id,
             date: dateObject,
-            lunches
+            slotIds: Array.from(selectedSlotIds)
           };
           const result = await createSession(formData);
-          if(result.success){
+          if (result.success) {
             successfulStudents.push({
               student: `${student.first_name} ${student.last_name}`,
               id: result.session.id
             });
-          } else{
+          } else {
             failedStudents.push({
-              student:`${student.first_name} ${student.last_name}`,
+              student: `${student.first_name} ${student.last_name}`,
               error: result.message || 'Failed to create session'
             });
           }
@@ -220,37 +169,31 @@ const BulkTutoring = () => {
           });
         }
       }
-      
-      // Set results
+
+      const selectedSlotNames = slots
+        .filter(s => selectedSlotIds.has(s.id))
+        .map(s => s.name)
+        .join(', ');
+
       setResults({
         date: format(selectedDate, 'MMMM d, yyyy'),
-        lunches: Object.keys(lunches).filter(key => lunches[key]),
+        slots: selectedSlotNames,
         total: selectedStudents.length,
         successful: successfulStudents.length,
         successfulStudents,
         failedStudents
       });
-      
+
       if (failedStudents.length === 0) {
         setSuccess(`Successfully scheduled ${successfulStudents.length} students for tutoring on ${format(selectedDate, 'MMMM d, yyyy')}.`);
+        setSelectedStudents([]);
+        setSelectedDate(null);
+        setSelectedSlotIds(new Set());
       } else if (successfulStudents.length === 0) {
         setError('Failed to schedule any students for tutoring.');
       } else {
         setSuccess(`Partially successful: Scheduled ${successfulStudents.length} out of ${selectedStudents.length} students.`);
       }
-      
-      // Reset form if completely successful
-      if (failedStudents.length === 0) {
-        setSelectedStudents([]);
-        setSelectedDate(null);
-        setLunches({
-          A: false,
-          B: false,
-          C: false,
-          D: false
-        });
-      }
-      
     } catch (err) {
       console.error('Error creating tutoring requests:', err);
       setError(apiService.formatError(err));
@@ -258,64 +201,36 @@ const BulkTutoring = () => {
       setLoading(false);
     }
   };
-      // Helper function to disable lunches
-  // Returns a set
-  const getDisabledLunches = () => {
-    const disabledLunches = new Set();
-    selectedStudents.forEach(student => {
-      if(student.lunchPeriod){
-        disabledLunches.add(student.lunchPeriod);
-      }
-    });
-    return disabledLunches;
-  }
-  // Function to check if a date should be disabled
-  const isBlocked = (date) => {
-    const dayOfWeek = date.getDay();
-    return dayOfWeek === 0 || dayOfWeek ===3 || dayOfWeek === 6;
-  };
-  
+
+  const isBlocked = (date) => noTutoringDays.includes(date.getDay());
+
+  const activeStudents = showAllStudents ? allStudents : myStudents;
+
   return (
     <Box>
-      
       <Paper elevation={3} sx={{ p: 3, mb: 3 }}>
         <Typography variant="h5" component="h2" gutterBottom>
           Schedule Multiple Students
         </Typography>
-        
+
         {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
         {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}
-        
+
         {results.successfulStudents && results.successfulStudents.length > 0 && (
           <Box sx={{ mb: 3 }}>
-            <Typography variant="h6" gutterBottom>
-              Results Summary
-            </Typography>
-            <Typography>
-              Date: {results.date}
-            </Typography>
-            <Typography>
-              Lunch Periods: {results.lunches.join(', ')}
-            </Typography>
-            <Typography>
-              Successfully scheduled: {results.successful} out of {results.total} students
-            </Typography>
-            
+            <Typography variant="h6" gutterBottom>Results Summary</Typography>
+            <Typography>Date: {results.date}</Typography>
+            <Typography>Slots: {results.slots}</Typography>
+            <Typography>Successfully scheduled: {results.successful} out of {results.total} students</Typography>
+
             {results.failedStudents && results.failedStudents.length > 0 && (
               <Box sx={{ mt: 2 }}>
-                <Typography variant="subtitle1" color="error">
-                  Failed students:
-                </Typography>
+                <Typography variant="subtitle1" color="error">Failed students:</Typography>
                 <List dense>
                   {results.failedStudents.map((failure, index) => (
                     <ListItem key={index}>
-                      <ListItemIcon>
-                        <RemoveIcon color="error" />
-                      </ListItemIcon>
-                      <ListItemText 
-                        primary={failure.student} 
-                        secondary={failure.error} 
-                      />
+                      <ListItemIcon><RemoveIcon color="error" /></ListItemIcon>
+                      <ListItemText primary={failure.student} secondary={failure.error} />
                     </ListItem>
                   ))}
                 </List>
@@ -323,14 +238,12 @@ const BulkTutoring = () => {
             )}
           </Box>
         )}
-        
+
         <Box component="form" onSubmit={handleSubmit}>
           <Grid container spacing={3}>
             <Grid item xs={12} md={6}>
-              <Typography variant="subtitle1" gutterBottom>
-                Session Details
-              </Typography>
-              
+              <Typography variant="subtitle1" gutterBottom>Session Details</Typography>
+
               <LocalizationProvider dateAdapter={AdapterDateFns}>
                 <DatePicker
                   label="Tutoring Date"
@@ -344,41 +257,33 @@ const BulkTutoring = () => {
                   disabled={loading}
                 />
               </LocalizationProvider>
-              
+
               <Typography variant="subtitle2" gutterBottom sx={{ mt: 2 }}>
-                Select Lunch Periods:
+                Select Tutoring Slots:
               </Typography>
-              
+
               <FormGroup>
                 <Grid container spacing={1}>
-                  {['A', 'B', 'C', 'D'].map((period) => {
-                    const disabledLunches = getDisabledLunches();
-                    const isDisabled = disabledLunches.has(period);
-                    
-                  return (
-                    <Grid item xs={6} key={period}>
-                      <FormControlLabel 
+                  {slots.map((slot) => (
+                    <Grid item xs={6} key={slot.id}>
+                      <FormControlLabel
                         control={
-                          <Checkbox 
-                            checked={lunches[period]} 
-                            onChange={handleLunchChange} 
-                            name={period} 
-                            disabled={loading || isDisabled}
+                          <Checkbox
+                            checked={selectedSlotIds.has(slot.id)}
+                            onChange={(e) => handleSlotChange(slot.id, e.target.checked)}
+                            disabled={loading}
                           />
-                        } 
-                        label={`Lunch ${period}`} 
+                        }
+                        label={slot.name}
                       />
                     </Grid>
-                  );
-                })}
+                  ))}
                 </Grid>
               </FormGroup>
             </Grid>
-            
+
             <Grid item xs={12} md={6}>
-              <Typography variant="subtitle1" gutterBottom>
-                Student Selection
-              </Typography>
+              <Typography variant="subtitle1" gutterBottom>Student Selection</Typography>
 
               <FormControlLabel
                 control={
@@ -395,57 +300,52 @@ const BulkTutoring = () => {
                 sx={{ mb: 1 }}
               />
 
-            <Autocomplete
-  id="student-autocomplete"
-  options={showAllStudents ? allStudents : myStudents}
-  getOptionLabel={(option) => option.displayName || `${option.first_name || ''} ${option.last_name || ''}`.trim()}
-  value={(showAllStudents ? allStudents : myStudents).find(student => student.id === selectedStudentId) || null}
-  onChange={(event, newValue) => {
-    const studentId = newValue ? newValue.id : '';
-    setSelectedStudentId(studentId);
-  }}
-  filterOptions={(options, { inputValue }) => {
-    const searchText = inputValue.toLowerCase();
-    return options.filter(option => {
-      const displayName = option.displayName || `${option.first_name || ''} ${option.last_name || ''}`.trim();
-      return displayName.toLowerCase().includes(searchText);
-    });
-  }}
-  renderInput={(params) => (
-    <TextField
-      {...params}
-      label="Add Student"
-      margin="normal"
-      fullWidth
-      placeholder="Type student name..."
-      disabled={fetchingStudents || loading}
-      helperText={fetchingStudents ? "Loading students..." : "Type to search by student name"}
-    />
-  )}
-  renderOption={(props, option) => {
-    const { key, ...cleanProps} = props;
-    return (
-      <Box component="li" key={key} {...cleanProps} sx={{ display: 'flex', alignItems: 'center', py: 1 }}>
-        <Box sx={{ flexGrow: 1 }}>
-          <Typography variant="body1">
-            {option.displayName || `${option.first_name || ''} ${option.last_name || ''}`.trim()}
-          </Typography>
-        </Box>
-      </Box>
-    );
-  }}
-  noOptionsText={
-    fetchingStudents ? "Loading students..." : "No students found"
-  }
-  loading={fetchingStudents}
-  disabled={loading}
-  clearOnBlur
-  selectOnFocus
-  handleHomeEndKeys
-  autoHighlight
-  openOnFocus
-/>
-              
+              <Autocomplete
+                id="student-autocomplete"
+                options={activeStudents}
+                getOptionLabel={(option) =>
+                  option.displayName || `${option.first_name || ''} ${option.last_name || ''}`.trim()
+                }
+                value={activeStudents.find(s => s.id === selectedStudentId) || null}
+                onChange={(event, newValue) => setSelectedStudentId(newValue ? newValue.id : '')}
+                filterOptions={(options, { inputValue }) => {
+                  const searchText = inputValue.toLowerCase();
+                  return options.filter(option => {
+                    const displayName = option.displayName || `${option.first_name || ''} ${option.last_name || ''}`.trim();
+                    return displayName.toLowerCase().includes(searchText);
+                  });
+                }}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="Add Student"
+                    margin="normal"
+                    fullWidth
+                    placeholder="Type student name..."
+                    disabled={fetchingStudents || loading}
+                    helperText={fetchingStudents ? 'Loading students...' : 'Type to search by student name'}
+                  />
+                )}
+                renderOption={(props, option) => {
+                  const { key, ...cleanProps } = props;
+                  return (
+                    <Box component="li" key={key} {...cleanProps} sx={{ display: 'flex', alignItems: 'center', py: 1 }}>
+                      <Typography variant="body1">
+                        {option.displayName || `${option.first_name || ''} ${option.last_name || ''}`.trim()}
+                      </Typography>
+                    </Box>
+                  );
+                }}
+                noOptionsText={fetchingStudents ? 'Loading students...' : 'No students found'}
+                loading={fetchingStudents}
+                disabled={loading}
+                clearOnBlur
+                selectOnFocus
+                handleHomeEndKeys
+                autoHighlight
+                openOnFocus
+              />
+
               <Button
                 variant="outlined"
                 color="primary"
@@ -458,7 +358,7 @@ const BulkTutoring = () => {
               </Button>
             </Grid>
           </Grid>
-          
+
           {selectedStudents.length > 0 && (
             <Box sx={{ mt: 3, mb: 3 }}>
               <Typography variant="subtitle1" gutterBottom>
@@ -469,7 +369,7 @@ const BulkTutoring = () => {
                   {selectedStudents.map((student) => (
                     <ListItem
                       key={student.id}
-                      sx={{pr:15}}
+                      sx={{ pr: 15 }}
                       secondaryAction={
                         <Button
                           edge="end"
@@ -482,24 +382,16 @@ const BulkTutoring = () => {
                         </Button>
                       }
                     >
-                      <ListItemIcon>
-                        <PersonIcon />
-                      </ListItemIcon>
-                      <ListItemText 
+                      <ListItemIcon><PersonIcon /></ListItemIcon>
+                      <ListItemText
                         primary={`${student.first_name} ${student.last_name}`}
-                        secondary={
-                          student.lunchPeriod ? `Lunch: ${student.lunchPeriod}` : 'No lunch info'
-                        } 
-                        sx={{mr:2}}
+                        secondary={student.slotNames ? `Slots: ${student.slotNames}` : 'No slot info'}
+                        sx={{ mr: 2 }}
                       />
-                      {student.lunchPeriod && (
-                        <Box sx={{flexShrink: 0}}>
-                        <Chip 
-                          label={`Lunch ${student.lunchPeriod}`} 
-                          size="small" 
-                          color="primary"
-                          />
-                          </Box>  
+                      {student.slotNames && (
+                        <Box sx={{ flexShrink: 0 }}>
+                          <Chip label={student.slotNames} size="small" color="primary" />
+                        </Box>
                       )}
                     </ListItem>
                   ))}
@@ -507,7 +399,7 @@ const BulkTutoring = () => {
               </Paper>
             </Box>
           )}
-          
+
           <Button
             type="submit"
             variant="contained"

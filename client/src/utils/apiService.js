@@ -126,6 +126,16 @@ const apiService = {
     return null;
   },
 
+  // Tutoring slot endpoints (admin-managed)
+  getTutoringSlots: async () => {
+    return apiClient.get('/api/admin/tutoring-slots');
+  },
+
+  // Scheduling config (no_tutoring_days, priority map) — no auth required
+  getScheduleConfig: async () => {
+    return apiClient.get('/api/tutoring/schedule-config');
+  },
+
   getTeacherAnalytics: async (teacherId) => {
     return await apiClient.get(`/api/analytics/${teacherId}`);
   },

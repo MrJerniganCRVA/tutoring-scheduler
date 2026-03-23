@@ -35,15 +35,13 @@ const TutoringRequestListSimple = () => {
   });
 
   
-  // Helper function to show lunch periods
-  const getLunchPeriods = (request) => {
-    const periods = [];
-    if (request.lunchA) periods.push('A');
-    if (request.lunchB) periods.push('B');
-    if (request.lunchC) periods.push('C');
-    if (request.lunchD) periods.push('D');
-    
-    return periods.join(', ');
+  // Helper function to show tutoring slot names
+  const getSlotNames = (request) => {
+    return (request.TutoringSlots || [])
+      .slice()
+      .sort((a, b) => a.order - b.order)
+      .map(s => s.name)
+      .join(', ');
   };
   
   return (
@@ -60,14 +58,14 @@ const TutoringRequestListSimple = () => {
               <TableHead>
                 <TableRow>
                   <TableCell>Student</TableCell>
-                  <TableCell>Lunch Periods</TableCell>
+                  <TableCell>Tutoring Slots</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {filteredRequests.map((request) => (
                   <TableRow key={request.id}>
                     <TableCell>{getFullName(request.Student) || 'Unknown'}</TableCell>
-                    <TableCell>{getLunchPeriods(request)}</TableCell>
+                    <TableCell>{getSlotNames(request)}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>

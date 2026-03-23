@@ -5,6 +5,7 @@ const TutoringRequest = require('../models/TutoringRequest');
 const Student = require('../models/Student');
 const Teacher = require('../models/Teacher');
 const TutoringSlot = require('../models/TutoringSlot');
+const StudentPeriodAssignment = require('../models/StudentPeriodAssignment');
 const SchoolConfig = require('../models/SchoolConfig');
 const auth = require('../middleware/auth');
 
@@ -46,6 +47,25 @@ const isNoTutoringDay = async (date) => {
   return noTutoringDays.includes(dayOfWeek);
 };
 
+// @route   GET api/tutoring/schedule-config
+// @desc    Return scheduling config values needed by the UI (no auth required)
+// @access  Public
+router.get('/schedule-config', async (req, res) => {
+  try {
+    const noTutoringDays = await SchoolConfig.getConfig('no_tutoring_days') || [0, 6];
+    const priorityEnabled = await SchoolConfig.getConfig('subject_priority_enabled');
+    const priorityMap = await SchoolConfig.getConfig('subject_priority_map') || {};
+    res.json({
+      no_tutoring_days: noTutoringDays,
+      subject_priority_enabled: priorityEnabled,
+      subject_priority_map: priorityMap
+    });
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).send('Server Error');
+  }
+});
+
 // @route   GET api/tutoring/:id
 // @desc    Get tutoring event by ID
 // @access  Public
@@ -54,7 +74,7 @@ router.get('/:id', async (req, res) => {
     const tutoringevent = await TutoringRequest.findByPk(req.params.id, {
       include: [
         { model: Teacher },
-        { model: Student },
+        { model: Student, include: [{ model: StudentPeriodAssignment, attributes: ['TeacherId'] }] },
         { model: TutoringSlot, through: { attributes: [] } }
       ]
     });
@@ -78,7 +98,7 @@ router.get('/', async (req, res) => {
     const requests = await TutoringRequest.findAll({
       include: [
         { model: Teacher },
-        { model: Student },
+        { model: Student, include: [{ model: StudentPeriodAssignment, attributes: ['TeacherId'] }] },
         { model: TutoringSlot, through: { attributes: [] } }
       ]
     });

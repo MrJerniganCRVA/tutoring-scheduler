@@ -1,5 +1,3 @@
-//Need to implement mui component and add in context to the app
-
 import React, { useState, useEffect } from 'react';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -8,146 +6,102 @@ import { Box, Chip, Alert, Typography } from '@mui/material';
 import { useTutoring } from '../contexts/TutoringContext';
 import apiService from '../utils/apiService';
 
-// Priority mapping
-const SUBJECT_PRIORITIES = {
-  1: 'CS',        // Monday
-  2: 'Math',      // Tuesday  
-  4: 'Humanities', // Thursday
-  5: 'Science'    // Friday
-};
+const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-const PriorityDatePicker = ({ 
+const PriorityDatePicker = ({
   studentId,
-  value, 
+  value,
   onChange,
-  ...muiDatePickerProps 
+  ...muiDatePickerProps
 }) => {
-  const {  getSessionsForStudent } = useTutoring();
+  const { getSessionsForStudent } = useTutoring();
   const [currentTeacher, setCurrentTeacher] = useState(null);
+  const [scheduleConfig, setScheduleConfig] = useState(null);
   const [dateStatus, setDateStatus] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Get teacher from localStorage
   useEffect(() => {
-    const fetchCurrentTeacher = async () =>{
+    const fetchInitialData = async () => {
       const teacherId = localStorage.getItem('teacherId');
-      if(!teacherId){
-        console.error("No teacher id in local storage");
+      if (!teacherId) {
+        console.error('No teacher id in local storage');
         setLoading(false);
         return;
       }
-      try{
-        const response = await apiService.getTeacher(teacherId);
-        setCurrentTeacher(response.data);
-      } catch(e){
-        console.error("Error fetching teacher", apiService.formatError(e));
-      } finally{
+      try {
+        const [teacherRes, configRes] = await Promise.all([
+          apiService.getTeacher(teacherId),
+          apiService.getScheduleConfig()
+        ]);
+        setCurrentTeacher(teacherRes.data);
+        setScheduleConfig(configRes.data);
+      } catch (e) {
+        console.error('Error loading date picker data', apiService.formatError(e));
+      } finally {
         setLoading(false);
       }
-
-    }
-
-    fetchCurrentTeacher();
-    
+    };
+    fetchInitialData();
   }, []);
-  const getDay = (date) => date.toISOString().split('T')[0];
-  // Get sessions for the selected student
+
   const studentSessions = studentId ? getSessionsForStudent(studentId) : [];
 
-  //all sessions work but the getSessionForStudent(studentId) isn't filtering
-  //fix or add filter to own section
+  const isSameDay = (date1, date2) =>
+    date1.toISOString().split('T')[0] === date2.toISOString().split('T')[0];
 
-  // Utility functions
-  const isSameDay = (date1, date2) => {
-    return date1.toISOString().split('T')[0] === date2.toISOString().split('T')[0];
+  const getPrioritySubjectForDay = (dayOfWeek) => {
+    if (!scheduleConfig?.subject_priority_enabled) return null;
+    const map = scheduleConfig.subject_priority_map || {};
+    return map[dayOfWeek] || null;
   };
 
   const shouldDisableDate = (date) => {
-    const yesteday = new Date();
-    yesteday.setDate(yesteday.getDate()-1);
-    if(date < yesteday) return true;
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    if (date < yesterday) return true;
+
     const dayOfWeek = date.getDay();
-    
-    // Disable weekends and Wednesday
-    if (dayOfWeek === 0 || dayOfWeek === 6 || dayOfWeek === 3) {
-      return true;
-    }
-    
+    const noTutoringDays = scheduleConfig?.no_tutoring_days || [0, 6];
+    if (noTutoringDays.includes(dayOfWeek)) return true;
+
     if (!studentId || !currentTeacher) return false;
 
-    // Check if student has a session on this date
-    const existingSession = studentSessions.find(session => 
+    const existingSession = studentSessions.find(session =>
       isSameDay(new Date(session.date), date)
     );
-    
-    if (!existingSession) {
-      return false;
-    }
+    if (!existingSession) return false;
 
-    // If current teacher's subject has priority for this day, allow selection
-    const dayPrioritySubject = SUBJECT_PRIORITIES[dayOfWeek];
-    if (currentTeacher.subject === dayPrioritySubject) {
-      return false; // Can override
-    }
-    return true; // Otherwise, disable the date
+    // If current teacher's subject has priority for this day, allow selection (can override)
+    const dayPrioritySubject = getPrioritySubjectForDay(dayOfWeek);
+    if (currentTeacher.subject === dayPrioritySubject) return false;
+
+    return true;
   };
 
   const getDateStatusInfo = (date) => {
     if (!studentId || !date || !currentTeacher) return null;
 
-    const dayOfWeek = getDay(date);
-    const existingSession = studentSessions.find(session => 
+    const dayOfWeek = date.getDay();
+    const existingSession = studentSessions.find(session =>
       isSameDay(new Date(session.date), date)
     );
-    //Need to check on return type for priority days. Make sure matching to component expected
-    if (!existingSession) { 
-      return { type: 'available', message: 'Available' };
-    }
+    if (!existingSession) return { type: 'available', message: 'Available' };
 
-    const dayPrioritySubject = SUBJECT_PRIORITIES[dayOfWeek];
-    
+    const dayPrioritySubject = getPrioritySubjectForDay(dayOfWeek);
     if (currentTeacher.subject === dayPrioritySubject) {
-      return { 
-        type: 'canOverride', 
+      return {
+        type: 'canOverride',
         message: `Will override existing booking (${currentTeacher.subject} priority day)`,
         existingSession
       };
     }
 
-    return { 
-      type: 'blocked', 
-      message: `Already booked`,
-      existingSession
-    };
+    return { type: 'blocked', message: 'Already booked', existingSession };
   };
 
   const handleDateChange = (newDate) => {
-    if (newDate) {
-      setDateStatus(getDateStatusInfo(newDate));
-    } else {
-      setDateStatus(null);
-    }
+    setDateStatus(newDate ? getDateStatusInfo(newDate) : null);
     onChange(newDate);
-  };
-  //Don't render if loading
-  if(loading){
-    return (
-      <Box sx={{ p: 2, border: '1px dashed #ccc', borderRadius: 1 }}>
-        <Typography color="text.secondary">
-          Loading teacher information...
-        </Typography>
-      </Box>
-    );
-  }
-  // Don't render if no student selected
-  if (!studentId) {
-    return (
-      <Box sx={{ p: 2, border: '1px dashed #ccc', borderRadius: 1 }}>
-        <Typography color="text.secondary">
-          Please select a student first
-        </Typography>
-      </Box>
-    );
   };
 
   const getStatusColor = (type) => {
@@ -159,6 +113,29 @@ const PriorityDatePicker = ({
     }
   };
 
+  // Build priority caption from config
+  const priorityCaption = scheduleConfig?.subject_priority_enabled
+    ? Object.entries(scheduleConfig.subject_priority_map || {})
+        .map(([dayIndex, subject]) => `${DAY_NAMES[parseInt(dayIndex)]}(${subject})`)
+        .join(' | ')
+    : null;
+
+  if (loading) {
+    return (
+      <Box sx={{ p: 2, border: '1px dashed #ccc', borderRadius: 1 }}>
+        <Typography color="text.secondary">Loading date picker...</Typography>
+      </Box>
+    );
+  }
+
+  if (!studentId) {
+    return (
+      <Box sx={{ p: 2, border: '1px dashed #ccc', borderRadius: 1 }}>
+        <Typography color="text.secondary">Please select a student first</Typography>
+      </Box>
+    );
+  }
+
   return (
     <LocalizationProvider dateAdapter={AdapterDateFns}>
       <Box>
@@ -166,9 +143,9 @@ const PriorityDatePicker = ({
           value={value}
           onChange={handleDateChange}
           shouldDisableDate={shouldDisableDate}
-          {...muiDatePickerProps} // All your existing MUI props
+          {...muiDatePickerProps}
         />
-        
+
         {dateStatus && (
           <Box sx={{ mt: 2 }}>
             <Chip
@@ -177,20 +154,22 @@ const PriorityDatePicker = ({
               variant="outlined"
               size="small"
             />
-            
             {dateStatus.type === 'canOverride' && (
               <Alert severity="warning" sx={{ mt: 1 }}>
                 <Typography variant="body2">
-                  This will override the existing booking because {currentTeacher?.subject} has 
+                  This will override the existing booking because {currentTeacher?.subject} has
                   priority on {value?.toLocaleDateString('en-US', { weekday: 'long' })}s.
                 </Typography>
               </Alert>
             )}
           </Box>
         )}
-        <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-          Priority: Mon(CS) | Tue(Math) | Thu(Humanities) | Fri(Science) 
-        </Typography>
+
+        {priorityCaption && (
+          <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+            Priority: {priorityCaption}
+          </Typography>
+        )}
       </Box>
     </LocalizationProvider>
   );

@@ -76,15 +76,13 @@ const TutoringRequestList = () => {
     return format(parseISO(dateString), 'MMM dd, yyyy');
   };
   
-  // Helper function to show lunch periods
-  const getLunchPeriods = (request) => {
-    const periods = [];
-    if (request.lunchA) periods.push('A');
-    if (request.lunchB) periods.push('B');
-    if (request.lunchC) periods.push('C');
-    if (request.lunchD) periods.push('D');
-    
-    return periods.join(', ');
+  // Helper function to show tutoring slot names
+  const getSlotNames = (request) => {
+    return (request.TutoringSlots || [])
+      .slice()
+      .sort((a, b) => a.order - b.order)
+      .map(s => s.name)
+      .join(', ');
   };
   
   return (
@@ -148,7 +146,7 @@ const TutoringRequestList = () => {
                 <TableRow>
                   <TableCell>Date</TableCell>
                   <TableCell>Student</TableCell>
-                  <TableCell>Lunch Periods</TableCell>
+                  <TableCell>Tutoring Slots</TableCell>
                   <TableCell>Status</TableCell>
                   <TableCell>Invite Status</TableCell>
                   <TableCell align="right">Cancel Event?</TableCell>
@@ -159,7 +157,7 @@ const TutoringRequestList = () => {
                   <TableRow key={request.id}>
                     <TableCell>{formatDate(request.date)}</TableCell>
                     <TableCell>{getFullName(request.Student) || 'Unknown'}</TableCell>
-                    <TableCell>{getLunchPeriods(request)}</TableCell>
+                    <TableCell>{getSlotNames(request)}</TableCell>
                     <TableCell>
                       <Chip 
                         label={request.status} 

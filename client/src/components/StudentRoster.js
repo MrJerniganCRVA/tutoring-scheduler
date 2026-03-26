@@ -26,17 +26,17 @@ import {
 import EditIcon from '@mui/icons-material/Edit';
 import PersonAddIcon from '@mui/icons-material/PersonAdd';
 import UpdateIcon from '@mui/icons-material/Update';
+import AddIcon from '@mui/icons-material/Add';
+import DeleteIcon from '@mui/icons-material/Delete';
 import apiService from '../utils/apiService';
 import BulkRRUpdate from './BulkRRUpdate';
 
-const ROTATIONS = ['R1', 'R2', 'RR', 'R4', 'R5'];
-
-const emptyEditState = { R1Id: null, R2Id: null, RRId: null, R4Id: null, R5Id: null };
-const emptyAddState = { id: '', first_name: '', last_name: '', R1: null, R2: null, RR: null, R4: null, R5: null };
+const emptyAddState = { id: '', first_name: '', last_name: '' };
 
 const StudentRoster = () => {
   const [students, setStudents] = useState([]);
   const [teachers, setTeachers] = useState([]);
+  const [periods, setPeriods] = useState([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -44,11 +44,11 @@ const StudentRoster = () => {
   // Edit dialog state
   const [editOpen, setEditOpen] = useState(false);
   const [editStudent, setEditStudent] = useState(null);
-  const [editFields, setEditFields] = useState(emptyEditState);
+  const [editAssignments, setEditAssignments] = useState([]); // [{periodId, teacherId}]
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState('');
 
-  // Bulk RR dialog state
+  // Bulk import dialog state
   const [bulkOpen, setBulkOpen] = useState(false);
 
   // Add dialog state
@@ -59,12 +59,14 @@ const StudentRoster = () => {
 
   const fetchData = useCallback(async () => {
     try {
-      const [studentsRes, teachersRes] = await Promise.all([
+      const [studentsRes, teachersRes, periodsRes] = await Promise.all([
         apiService.getStudents(),
-        apiService.getTeachers()
+        apiService.getTeachers(),
+        apiService.getPeriods()
       ]);
       setStudents(studentsRes.data);
       setTeachers(teachersRes.data);
+      setPeriods(periodsRes.data);
     } catch (e) {
       setError('Failed to load data. Please refresh.');
     } finally {
@@ -76,32 +78,63 @@ const StudentRoster = () => {
     fetchData();
   }, [fetchData]);
 
-  const getLastName = (teacherObj) => teacherObj?.last_name ?? '—';
-
   const filteredStudents = students.filter(s => {
     const full = `${s.first_name} ${s.last_name}`.toLowerCase();
     return full.includes(search.toLowerCase());
   });
 
+  // Format a student's period assignments as a compact string
+  const formatAssignments = (student) => {
+    const assignments = student.StudentPeriodAssignments || [];
+    if (assignments.length === 0) return '—';
+    return assignments
+      .slice()
+      .sort((a, b) => (a.Period?.order ?? 0) - (b.Period?.order ?? 0))
+      .map(a => `${a.Period?.name ?? '?'}: ${a.Teacher?.last_name ?? '?'}`)
+      .join(' | ');
+  };
+
   // --- Edit handlers ---
   const openEdit = (student) => {
     setEditStudent(student);
-    setEditFields({
-      R1Id: student.R1?.id ?? null,
-      R2Id: student.R2?.id ?? null,
-      RRId: student.RR?.id ?? null,
-      R4Id: student.R4?.id ?? null,
-      R5Id: student.R5?.id ?? null
-    });
+    setEditAssignments(
+      (student.StudentPeriodAssignments || [])
+        .slice()
+        .sort((a, b) => (a.Period?.order ?? 0) - (b.Period?.order ?? 0))
+        .map(a => ({ periodId: a.PeriodId, teacherId: a.TeacherId }))
+    );
     setEditError('');
     setEditOpen(true);
   };
 
+  const handleAssignmentChange = (index, field, value) => {
+    setEditAssignments(prev =>
+      prev.map((row, i) => i === index ? { ...row, [field]: value === '' ? null : Number(value) } : row)
+    );
+  };
+
+  const addAssignmentRow = () => {
+    setEditAssignments(prev => [...prev, { periodId: null, teacherId: null }]);
+  };
+
+  const removeAssignmentRow = (index) => {
+    setEditAssignments(prev => prev.filter((_, i) => i !== index));
+  };
+
   const handleEditSave = async () => {
+    // Validate: no duplicate periods
+    const periodIds = editAssignments.filter(a => a.periodId).map(a => a.periodId);
+    if (new Set(periodIds).size !== periodIds.length) {
+      setEditError('A student cannot have the same period assigned twice.');
+      return;
+    }
     setEditSaving(true);
     setEditError('');
     try {
-      await apiService.updateStudent(editStudent.id, editFields);
+      await apiService.updateStudentPeriods(
+        editStudent.id,
+        editAssignments.filter(a => a.periodId && a.teacherId)
+      );
       setEditOpen(false);
       await fetchData();
     } catch (e) {
@@ -133,14 +166,7 @@ const StudentRoster = () => {
       await apiService.createStudent({
         id: Number(addFields.id),
         first_name: addFields.first_name.trim(),
-        last_name: addFields.last_name.trim(),
-        teachers: {
-          R1: addFields.R1,
-          R2: addFields.R2,
-          RR: addFields.RR,
-          R4: addFields.R4,
-          R5: addFields.R5
-        }
+        last_name: addFields.last_name.trim()
       });
       setAddOpen(false);
       await fetchData();
@@ -169,7 +195,7 @@ const StudentRoster = () => {
             startIcon={<UpdateIcon />}
             onClick={() => setBulkOpen(true)}
           >
-            Bulk RR Update
+            Bulk Import
           </Button>
           <Button
             variant="contained"
@@ -198,26 +224,22 @@ const StudentRoster = () => {
           <TableHead>
             <TableRow>
               <TableCell><strong>Student</strong></TableCell>
-              {ROTATIONS.map(r => (
-                <TableCell key={r} align="center"><strong>{r}</strong></TableCell>
-              ))}
+              <TableCell><strong>Period Assignments</strong></TableCell>
               <TableCell align="center"><strong>Edit</strong></TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
             {filteredStudents.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} align="center">No students found.</TableCell>
+                <TableCell colSpan={3} align="center">No students found.</TableCell>
               </TableRow>
             ) : (
               filteredStudents.map(student => (
                 <TableRow key={student.id} hover>
                   <TableCell>{student.first_name} {student.last_name}</TableCell>
-                  <TableCell align="center">{getLastName(student.R1)}</TableCell>
-                  <TableCell align="center">{getLastName(student.R2)}</TableCell>
-                  <TableCell align="center">{getLastName(student.RR)}</TableCell>
-                  <TableCell align="center">{getLastName(student.R4)}</TableCell>
-                  <TableCell align="center">{getLastName(student.R5)}</TableCell>
+                  <TableCell sx={{ color: 'text.secondary', fontSize: '0.85rem' }}>
+                    {formatAssignments(student)}
+                  </TableCell>
                   <TableCell align="center">
                     <IconButton size="small" color="primary" onClick={() => openEdit(student)}>
                       <EditIcon fontSize="small" />
@@ -231,35 +253,58 @@ const StudentRoster = () => {
       </TableContainer>
 
       {/* Edit Dialog */}
-      <Dialog open={editOpen} onClose={() => setEditOpen(false)} maxWidth="xs" fullWidth>
+      <Dialog open={editOpen} onClose={() => setEditOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle>
           Edit — {editStudent?.first_name} {editStudent?.last_name}
         </DialogTitle>
         <DialogContent>
           {editError && <Alert severity="error" sx={{ mb: 2 }}>{editError}</Alert>}
-          {ROTATIONS.map(rotation => {
-            const fieldKey = rotation === 'RR' ? 'RRId' : `${rotation}Id`;
-            return (
-              <FormControl fullWidth margin="dense" key={rotation}>
-                <InputLabel>{rotation} Teacher</InputLabel>
+          <Typography variant="subtitle2" sx={{ mb: 1.5, mt: 0.5 }}>
+            Period Assignments
+          </Typography>
+          {editAssignments.map((row, index) => (
+            <Box key={index} sx={{ display: 'flex', gap: 1, mb: 1, alignItems: 'center' }}>
+              <FormControl size="small" sx={{ flex: 1 }}>
+                <InputLabel>Period</InputLabel>
                 <Select
-                  label={`${rotation} Teacher`}
-                  value={editFields[fieldKey] ?? ''}
-                  onChange={e => setEditFields(prev => ({
-                    ...prev,
-                    [fieldKey]: e.target.value === '' ? null : e.target.value
-                  }))}
+                  label="Period"
+                  value={row.periodId ?? ''}
+                  onChange={e => handleAssignmentChange(index, 'periodId', e.target.value)}
                 >
-                  <MenuItem value=""><em>None</em></MenuItem>
+                  <MenuItem value=""><em>Select period</em></MenuItem>
+                  {periods.map(p => (
+                    <MenuItem key={p.id} value={p.id}>{p.name}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              <FormControl size="small" sx={{ flex: 2 }}>
+                <InputLabel>Teacher</InputLabel>
+                <Select
+                  label="Teacher"
+                  value={row.teacherId ?? ''}
+                  onChange={e => handleAssignmentChange(index, 'teacherId', e.target.value)}
+                >
+                  <MenuItem value=""><em>Select teacher</em></MenuItem>
                   {teachers.map(t => (
                     <MenuItem key={t.id} value={t.id}>
-                      {t.first_name} {t.last_name} — {t.subject}
+                      {t.first_name} {t.last_name}{t.subject ? ` — ${t.subject}` : ''}
                     </MenuItem>
                   ))}
                 </Select>
               </FormControl>
-            );
-          })}
+              <IconButton size="small" color="error" onClick={() => removeAssignmentRow(index)}>
+                <DeleteIcon fontSize="small" />
+              </IconButton>
+            </Box>
+          ))}
+          <Button
+            size="small"
+            startIcon={<AddIcon />}
+            onClick={addAssignmentRow}
+            sx={{ mt: 0.5 }}
+          >
+            Add period
+          </Button>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setEditOpen(false)} disabled={editSaving}>Cancel</Button>
@@ -274,13 +319,14 @@ const StudentRoster = () => {
         </DialogActions>
       </Dialog>
 
-      {/* Bulk RR Update Dialog */}
+      {/* Bulk Import Dialog */}
       <BulkRRUpdate
         open={bulkOpen}
         onClose={() => setBulkOpen(false)}
         onComplete={fetchData}
         students={students}
         teachers={teachers}
+        periods={periods}
       />
 
       {/* Add Student Dialog */}
@@ -310,26 +356,9 @@ const StudentRoster = () => {
             value={addFields.last_name}
             onChange={e => setAddFields(prev => ({ ...prev, last_name: e.target.value }))}
           />
-          {ROTATIONS.map(rotation => (
-            <FormControl fullWidth margin="dense" key={rotation}>
-              <InputLabel>{rotation} Teacher</InputLabel>
-              <Select
-                label={`${rotation} Teacher`}
-                value={addFields[rotation] ?? ''}
-                onChange={e => setAddFields(prev => ({
-                  ...prev,
-                  [rotation]: e.target.value === '' ? null : e.target.value
-                }))}
-              >
-                <MenuItem value=""><em>None</em></MenuItem>
-                {teachers.map(t => (
-                  <MenuItem key={t.id} value={t.id}>
-                    {t.first_name} {t.last_name} — {t.subject}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          ))}
+          <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+            Period assignments can be set after adding the student.
+          </Typography>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setAddOpen(false)} disabled={addSaving}>Cancel</Button>

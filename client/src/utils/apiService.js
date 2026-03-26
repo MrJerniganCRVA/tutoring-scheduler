@@ -126,6 +126,20 @@ const apiService = {
     return null;
   },
 
+  // Period endpoints (admin-managed)
+  getPeriods: async () => {
+    return apiClient.get('/api/admin/periods');
+  },
+
+  // Student period assignment endpoints
+  updateStudentPeriods: async (studentId, assignments) => {
+    return apiClient.put(`/api/students/${studentId}/periods`, assignments);
+  },
+
+  bulkUpdatePeriods: async (updates) => {
+    return apiClient.post('/api/students/bulk-periods', { updates });
+  },
+
   // Tutoring slot endpoints (admin-managed)
   getTutoringSlots: async () => {
     return apiClient.get('/api/admin/tutoring-slots');

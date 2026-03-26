@@ -1,108 +1,125 @@
-import React, {useState, useEffect} from 'react';
-import{
+import React, { useState, useEffect } from 'react';
+import {
     Box,
     Typography,
     Paper,
     Button,
-    Alert, 
+    Alert,
     CircularProgress
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import GoogleIcon from '@mui/icons-material/Google';
 
 const API_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
+const DEV_AUTH = process.env.REACT_APP_DEV_AUTH === 'true';
 
-const Login = () =>{
+const Login = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const navigate = useNavigate();
 
-    useEffect(()=>{
-        //check if user is already auth
-        const checkAuth = async () =>{
-            try{
-                const response = await fetch(`${API_URL}/auth/current`,{
+    useEffect(() => {
+        const urlParams = new URLSearchParams(window.location.search);
+        const authError = urlParams.get('error');
+        if (authError === 'auth_failed') {
+            setError('Authentication failed. Please make sure you are logging in with your school email.');
+        }
+
+        // Check if already authenticated
+        const checkAuth = async () => {
+            try {
+                const response = await fetch(`${API_URL}/auth/current`, {
                     credentials: 'include'
                 });
-                if(response.ok){
+                if (response.ok) {
                     const teacher = await response.json();
-                    //user logged in redirect to dashboard
-                    localStorage.setItem('teacherId',teacher.id);
+                    localStorage.setItem('teacherId', teacher.id);
                     localStorage.setItem('teacherName', `${teacher.firstName} ${teacher.lastName}`);
                     localStorage.setItem('isAdmin', teacher.isAdmin ? 'true' : 'false');
                     navigate('/dashboard');
-                } else{
-                    //not logged in, show login
+                } else {
                     setLoading(false);
                 }
-            } catch(err){
-                console.error('Auth check failed in Login component', err);
+            } catch (err) {
+                console.error('Auth check failed', err);
                 setLoading(false);
             }
         };
 
-        //check for errors in url params
-        const urlParams = new URLSearchParams(window.location.search);
-        const authError = urlParams.get('error');
-        if(authError==='auth_failed'){
-            setError('Authentication failed. Please make sure you are logging in with school email');
-        }
         checkAuth();
     }, [navigate]);
 
     const handleGoogleLogin = () => {
-        //redirect to backend
-        window.location.href=`${API_URL}/auth/google`;
+        window.location.href = `${API_URL}/auth/google`;
     };
-    if(loading){
-        return(
-            <Box sx={{display:'flex', justifyContent:'center', minHeight:'100vh'}}>
+
+    if (loading) {
+        return (
+            <Box sx={{ display: 'flex', justifyContent: 'center', minHeight: '100vh' }}>
                 <CircularProgress />
             </Box>
         );
     }
+
     return (
         <Box sx={{
-            minHeight:'60vh',
-            display:'flex',
-            justifyContent:'center',
-            alignItems:'center',
+            minHeight: '60vh',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
             backgroundColor: '#f5f5f5'
-
-
         }}>
-            <Paper elevation={3} sx={{ p:3, width:'85%', maxWidth:380, textAlign:'center'}}>
+            <Paper elevation={3} sx={{ p: 3, width: '85%', maxWidth: 380, textAlign: 'center' }}>
                 <Typography variant="h4" component="h1" gutterBottom>
-                    RR Tutoring Scheduler
+                    Tutoring Scheduler
                 </Typography>
-                <Typography variant="body1" color="text.secondary" sx={{mb:3}}>
-                    Sign in with your CodeRVA Google Account to access the Tutoring Page.
-                </Typography>
-                {error && <Alert severity="error" sx={{mb:2}}>{error}</Alert>}
-                <Button 
-                    variant="contained"
-                    color="primary"
-                    fullWidth
-                    size="large"
-                    startIcon={<GoogleIcon />}
-                    onClick={handleGoogleLogin}
-                    sx={{
-                        py:1.2,
-                        textTransform: 'none',
-                        fontSize:'16px',
-                        '&:hover':{
-                            backgroundColor:'#79c1f1',
-                            color:'#222222'
-                        }
-                    }}
-                >
-                    Sign In With Google
-                </Button>
-                <Typography variant="caption" color="text.secondary" sx={{mt:3, display:'block'}}>
-                    Only CodeRVA Teachers can login
-                </Typography>
+
+                {DEV_AUTH ? (
+                    <>
+                        <Alert severity="warning" sx={{ mb: 2, textAlign: 'left' }}>
+                            <strong>Dev mode</strong> — Google OAuth is disabled. No credentials required.
+                        </Alert>
+                        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                            Select your teacher account on the next screen.
+                        </Typography>
+                        <Button
+                            variant="contained"
+                            color="warning"
+                            fullWidth
+                            size="large"
+                            onClick={() => navigate('/select-teacher')}
+                            sx={{ py: 1.2, textTransform: 'none', fontSize: '16px' }}
+                        >
+                            Continue (Dev Mode)
+                        </Button>
+                    </>
+                ) : (
+                    <>
+                        <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+                            Sign in with your school Google account to continue.
+                        </Typography>
+                        {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+                        <Button
+                            variant="contained"
+                            color="primary"
+                            fullWidth
+                            size="large"
+                            startIcon={<GoogleIcon />}
+                            onClick={handleGoogleLogin}
+                            sx={{
+                                py: 1.2,
+                                textTransform: 'none',
+                                fontSize: '16px',
+                                '&:hover': { backgroundColor: '#79c1f1', color: '#222222' }
+                            }}
+                        >
+                            Sign In With Google
+                        </Button>
+                    </>
+                )}
             </Paper>
         </Box>
-    )
+    );
 };
+
 export default Login;

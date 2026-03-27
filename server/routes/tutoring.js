@@ -66,6 +66,19 @@ router.get('/schedule-config', async (req, res) => {
   }
 });
 
+// @route   GET api/tutoring/slots
+// @desc    Get all tutoring slots (public — needed by request form for all teachers)
+// @access  Public
+router.get('/slots', async (req, res) => {
+  try {
+    const slots = await TutoringSlot.findAll({ order: [['order', 'ASC']] });
+    res.json(slots);
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).send('Server Error');
+  }
+});
+
 // @route   GET api/tutoring/:id
 // @desc    Get tutoring event by ID
 // @access  Public

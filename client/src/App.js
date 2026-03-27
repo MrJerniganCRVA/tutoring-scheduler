@@ -2,13 +2,13 @@ import React from 'react';
 import { BrowserRouter as Router, Route, Routes, Navigate } from 'react-router-dom';
 import { Box, Container, CssBaseline, ThemeProvider, createTheme } from '@mui/material';
 import Login from './components/Login';
-import TeacherSelect from './components/TeacherSelect';
-import RaptorRotation from './components/RaptorRotation';
+import TeacherSelect from './components/TeacherSelect';import RaptorRotation from './components/RaptorRotation';
 import TeacherDashboard from './components/TeacherDashboard';
 import Header from './components/Header';
 import Scheduling from './components/Scheduling';
 import TutoringEvents from './components/TutoringEvents';
 import StudentRoster from './components/StudentRoster';
+import AdminPanel from './components/AdminPanel';
 import {TutoringProvider } from './contexts/TutoringContext';
 import { AnalyticsProvider } from './contexts/AnalyticsContext';
 import Footer from './components/Footer';
@@ -59,13 +59,15 @@ function App() {
         <TutoringProvider>
           <AnalyticsProvider>
             <Routes>
-              <Route path="/select-teacher" element={<Login />} />
+              <Route path="/login" element={<Login />} />
+              <Route path="/select-teacher" element={<TeacherSelect />} />
               <Route path="/dashboard" element={<RaptorRotation />} />
               <Route path="/tutoring" element={<Scheduling />} />
               <Route path="/calendar" element={<TutoringEvents />} />
               <Route path="/analytics" element={<TeacherDashboard />} />
               <Route path="/roster" element={<AdminRoute><StudentRoster /></AdminRoute>} />
-              <Route path="/" element={<Navigate to="/select-teacher" replace />} />
+              <Route path="/admin" element={<AdminRoute><AdminPanel /></AdminRoute>} />
+              <Route path="/" element={<Navigate to="/login" replace />} />
               <Route path="*" element={<div>Page Not Found</div>} />
             </Routes>
           </AnalyticsProvider>

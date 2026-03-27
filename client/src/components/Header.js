@@ -30,10 +30,11 @@ const Header = () => {
 
       localStorage.removeItem('teacherId');
       localStorage.removeItem('teacherName');
-      navigate('/select-teacher');
+      localStorage.removeItem('isAdmin');
+      navigate('/login');
     } catch (err){
       console.error("Logout failed", err);
-      navigate('/select-teacher');
+      navigate('/login');
     }
   };
 
@@ -43,6 +44,7 @@ const Header = () => {
     if (location.pathname === '/calendar') return 2;
     if (location.pathname === '/analytics') return 3;
     if (location.pathname === '/roster') return 4;
+    if (location.pathname === '/admin') return 5;
     return false;
   };
   
@@ -79,6 +81,7 @@ const Header = () => {
           <Tab label="Events" onClick={() => navigate('/calendar')} />
           <Tab label="Analytics" onClick={() => navigate('/analytics')} />
           {isAdmin && <Tab label="Roster" onClick={() => navigate('/roster')} />}
+          {isAdmin && <Tab label="Admin" onClick={() => navigate('/admin')} />}
         </Tabs>
         
         <Box sx={{ display: 'flex', alignItems: 'center' }}>

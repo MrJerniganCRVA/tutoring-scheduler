@@ -130,6 +130,15 @@ const apiService = {
   getPeriods: async () => {
     return apiClient.get('/api/admin/periods');
   },
+  createPeriod: async (data) => {
+    return apiClient.post('/api/admin/periods', data);
+  },
+  updatePeriod: async (id, data) => {
+    return apiClient.put(`/api/admin/periods/${id}`, data);
+  },
+  deletePeriod: async (id) => {
+    return apiClient.delete(`/api/admin/periods/${id}`);
+  },
 
   // Student period assignment endpoints
   updateStudentPeriods: async (studentId, assignments) => {
@@ -143,6 +152,23 @@ const apiService = {
   // Tutoring slot endpoints (admin-managed)
   getTutoringSlots: async () => {
     return apiClient.get('/api/admin/tutoring-slots');
+  },
+  createTutoringSlot: async (data) => {
+    return apiClient.post('/api/admin/tutoring-slots', data);
+  },
+  updateTutoringSlot: async (id, data) => {
+    return apiClient.put(`/api/admin/tutoring-slots/${id}`, data);
+  },
+  deleteTutoringSlot: async (id) => {
+    return apiClient.delete(`/api/admin/tutoring-slots/${id}`);
+  },
+
+  // School config (admin-managed)
+  getAdminConfig: async () => {
+    return apiClient.get('/api/admin/config');
+  },
+  updateAdminConfig: async (updates) => {
+    return apiClient.put('/api/admin/config', updates);
   },
 
   // Scheduling config (no_tutoring_days, priority map) — no auth required

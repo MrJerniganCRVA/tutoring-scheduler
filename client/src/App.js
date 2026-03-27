@@ -9,6 +9,7 @@ import Header from './components/Header';
 import Scheduling from './components/Scheduling';
 import TutoringEvents from './components/TutoringEvents';
 import StudentRoster from './components/StudentRoster';
+import AdminPanel from './components/AdminPanel';
 import {TutoringProvider } from './contexts/TutoringContext';
 import { AnalyticsProvider } from './contexts/AnalyticsContext';
 import Footer from './components/Footer';
@@ -65,6 +66,7 @@ function App() {
               <Route path="/calendar" element={<TutoringEvents />} />
               <Route path="/analytics" element={<TeacherDashboard />} />
               <Route path="/roster" element={<AdminRoute><StudentRoster /></AdminRoute>} />
+              <Route path="/admin" element={<AdminRoute><AdminPanel /></AdminRoute>} />
               <Route path="/" element={<Navigate to="/select-teacher" replace />} />
               <Route path="*" element={<div>Page Not Found</div>} />
             </Routes>

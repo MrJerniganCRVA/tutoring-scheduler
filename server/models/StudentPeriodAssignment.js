@@ -4,8 +4,7 @@ const Teacher = require('./Teacher');
 const Student = require('./Student');
 const Period = require('./Period');
 
-// Stores which teacher a student has for each period.
-// Replaces the CodeRVA-specific R1Id–R5Id FK columns on Student.
+// Stores which teacher a student has for each class period.
 const StudentPeriodAssignment = sequelize.define('StudentPeriodAssignment', {
   TeacherId: {
     type: DataTypes.INTEGER,

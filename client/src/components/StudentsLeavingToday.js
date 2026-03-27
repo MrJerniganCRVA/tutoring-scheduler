@@ -12,7 +12,7 @@ import {
 } from '@mui/material';
 import {useTutoring } from '../contexts/TutoringContext';
 
-const RaptorRotationEvents = () => {
+const StudentsLeavingToday = () => {
   const {sessions, error } = useTutoring();
 
   const teacherId = parseInt(localStorage.getItem('teacherId'));
@@ -42,7 +42,6 @@ const RaptorRotationEvents = () => {
     return !!studentHasThisTeacher;
   });
 
-  // Helper function to show tutoring slot names
   const getSlotNames = (request) => {
     return (request.TutoringSlots || [])
       .slice()
@@ -90,4 +89,4 @@ const RaptorRotationEvents = () => {
   );
 };
 
-export default RaptorRotationEvents;
+export default StudentsLeavingToday;

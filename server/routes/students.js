@@ -207,10 +207,10 @@ router.put('/:id', auth, async (req, res) => {
   }
 });
 
-// @route   POST api/students/bulk-rr
+// @route   POST api/students/bulk-slots
 // @desc    Bulk update student tutoring slot assignments
 // @access  Admin only
-router.post('/bulk-rr', auth, async (req, res) => {
+router.post('/bulk-slots', auth, async (req, res) => {
   try {
     const requestingTeacher = await Teacher.findByPk(req.teacher.id);
     if (!requestingTeacher?.is_admin) {

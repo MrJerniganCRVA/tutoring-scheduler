@@ -1,6 +1,6 @@
 {
   "name": "tutoring-scheduler-client",
-  "version": "0.3",
+  "version": "0.1.0",
   "private": true,
   "dependencies": {
     "@emotion/react": "^11.11.0",

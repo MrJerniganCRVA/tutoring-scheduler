@@ -57,8 +57,8 @@ const apiService = {
     return apiClient.put(`/api/students/${id}`, data);
   },
 
-  bulkUpdateRR: async (updates) => {
-    return apiClient.post('/api/students/bulk-rr', { updates });
+  bulkUpdateSlots: async (updates) => {
+    return apiClient.post('/api/students/bulk-slots', { updates });
   },
   
   // Tutoring request endpoints

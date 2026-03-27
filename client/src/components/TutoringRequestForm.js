@@ -273,7 +273,7 @@ const TutoringRequestForm = () => {
                     disabled={loading}
                   />
                 }
-                label={`${slot.name} (${slot.startTime}–${slot.endTime})`}
+                label={slot.startTime && slot.endTime ? `${slot.name} (${slot.startTime}–${slot.endTime})` : slot.name}
               />
             ))}
           </FormGroup>

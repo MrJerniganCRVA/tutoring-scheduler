@@ -2,7 +2,8 @@ import React from 'react';
 import { BrowserRouter as Router, Route, Routes, Navigate } from 'react-router-dom';
 import { Box, Container, CssBaseline, ThemeProvider, createTheme } from '@mui/material';
 import Login from './components/Login';
-import TeacherSelect from './components/TeacherSelect';import RaptorRotation from './components/RaptorRotation';
+import TeacherSelect from './components/TeacherSelect';
+import TutoringDashboard from './components/TutoringDashboard';
 import TeacherDashboard from './components/TeacherDashboard';
 import Header from './components/Header';
 import Scheduling from './components/Scheduling';
@@ -61,7 +62,7 @@ function App() {
             <Routes>
               <Route path="/login" element={<Login />} />
               <Route path="/select-teacher" element={<TeacherSelect />} />
-              <Route path="/dashboard" element={<RaptorRotation />} />
+              <Route path="/dashboard" element={<TutoringDashboard />} />
               <Route path="/tutoring" element={<Scheduling />} />
               <Route path="/calendar" element={<TutoringEvents />} />
               <Route path="/analytics" element={<TeacherDashboard />} />

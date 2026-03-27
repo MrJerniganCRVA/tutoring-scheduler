@@ -1,7 +1,7 @@
 {
   "name": "server",
-  "version": "0.3",
-  "description": "REST API for RR Tutoring for CodeRVA",
+  "version": "0.1.0",
+  "description": "REST API for Tutoring Scheduler",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

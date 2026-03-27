@@ -1,24 +1,21 @@
-// Update src/components/Dashboard.js
 import React, { useEffect } from 'react';
 import { Box, Typography, Alert, CircularProgress } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import TutoringRequestListSimple from './TutoringRequestListSimple';
-import RaptorRotationEvents from './RaptorRotationEvents';
+import StudentsLeavingToday from './StudentsLeavingToday';
 import { useTutoring } from '../contexts/TutoringContext';
 
-const RaptorRotation = () => {
+const TutoringDashboard = () => {
   const navigate = useNavigate();
   const { loading, error} = useTutoring();
-  
+
   useEffect(() => {
-    // Check if user is logged in
     const teacherId = localStorage.getItem('teacherId');
     if (!teacherId) {
-      navigate('/select-teacher');
+      navigate('/login');
       return;
     }}, [navigate]);
-  
-  
+
   if (loading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
@@ -26,16 +23,16 @@ const RaptorRotation = () => {
       </Box>
     );
   }
-  
+
   return (
     <Box>
       <Typography variant="h4" component="h1" gutterBottom>
-        Leaving RR Today
+        Students Leaving for Tutoring Today
       </Typography>
-      
+
       {error && <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>}
 
-      <RaptorRotationEvents  />
+      <StudentsLeavingToday />
       <Typography variant="h4" component="h1" gutterBottom>
         Coming For Tutoring
       </Typography>
@@ -44,5 +41,4 @@ const RaptorRotation = () => {
   );
 };
 
-export default RaptorRotation;
-
+export default TutoringDashboard;

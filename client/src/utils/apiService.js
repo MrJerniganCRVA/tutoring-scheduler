@@ -149,10 +149,13 @@ const apiService = {
     return apiClient.post('/api/students/bulk-periods', { updates });
   },
 
-  // Tutoring slot endpoints (admin-managed)
+  // Tutoring slot endpoints
+  // Public read (used by request form for all teachers)
   getTutoringSlots: async () => {
-    return apiClient.get('/api/admin/tutoring-slots');
+    return apiClient.get('/api/tutoring/slots');
   },
+  // Admin-only mutations
+
   createTutoringSlot: async (data) => {
     return apiClient.post('/api/admin/tutoring-slots', data);
   },

@@ -30,10 +30,11 @@ const Header = () => {
 
       localStorage.removeItem('teacherId');
       localStorage.removeItem('teacherName');
-      navigate('/select-teacher');
+      localStorage.removeItem('isAdmin');
+      navigate('/login');
     } catch (err){
       console.error("Logout failed", err);
-      navigate('/select-teacher');
+      navigate('/login');
     }
   };
 

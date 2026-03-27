@@ -377,9 +377,7 @@ function ConfigPanel() {
     try {
       setLoading(true);
       const res = await apiService.getAdminConfig();
-      const c = res.data; // array of { key, value }
-      const byKey = {};
-      c.forEach(item => { byKey[item.key] = item.value; });
+      const byKey = res.data; // flat object: { school_name: '...', no_tutoring_days: [...], ... }
       setConfig(byKey);
 
       setSchoolName(byKey.school_name || '');

@@ -96,7 +96,6 @@ function parseCSV(text, students, teachers, periods) {
       const csvRowNum = idx + 2;
       const parts = parseCSVLine(line);
       if (parts.length < 4) {
-        // Can't even identify the student; add a top-level error row
         const key = `__error_${csvRowNum}`;
         byStudent[key] = byStudent[key] || {
           studentId: null, student: null, assignments: [],
@@ -155,7 +154,7 @@ function parseCSV(text, students, teachers, periods) {
   return Object.values(byStudent);
 }
 
-const BulkRRUpdate = ({ open, onClose, onComplete, students, teachers, periods }) => {
+const BulkPeriodImport = ({ open, onClose, onComplete, students, teachers, periods }) => {
   const [step, setStep] = useState(1);
   const [parsedStudents, setParsedStudents] = useState([]);
   const [parseError, setParseError] = useState('');
@@ -234,7 +233,7 @@ const BulkRRUpdate = ({ open, onClose, onComplete, students, teachers, periods }
               Upload a CSV with one row per student–period assignment. Use four columns:
             </Typography>
             <Paper variant="outlined" sx={{ p: 1.5, mb: 2, fontFamily: 'monospace', fontSize: '0.8rem', bgcolor: 'grey.50', whiteSpace: 'pre' }}>
-              {'student_id,student_name,period_name,teacher_email\n100000001,"Doe, John",Math,smith@school.edu\n100000001,"Doe, John",Science,jones@school.edu\n100000002,"Smith, Jane",Math,smith@school.edu'}
+              {'student_id,student_name,period_name,teacher_email\n100000001,"Doe, John",Period 1,smith@school.edu\n100000001,"Doe, John",Period 2,jones@school.edu\n100000002,"Smith, Jane",Period 1,smith@school.edu'}
             </Paper>
             <Typography variant="body2" sx={{ mb: 2 }}>
               <strong>Tip:</strong> Export the current assignments first, update the <code>period_name</code> and <code>teacher_email</code> columns, then re-upload. The <code>student_name</code> column is ignored on import. Uploading a student's rows <strong>replaces</strong> all their current assignments.
@@ -384,4 +383,4 @@ const BulkRRUpdate = ({ open, onClose, onComplete, students, teachers, periods }
   );
 };
 
-export default BulkRRUpdate;
+export default BulkPeriodImport;

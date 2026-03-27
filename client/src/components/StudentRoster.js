@@ -29,7 +29,7 @@ import UpdateIcon from '@mui/icons-material/Update';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
 import apiService from '../utils/apiService';
-import BulkRRUpdate from './BulkRRUpdate';
+import BulkPeriodImport from './BulkPeriodImport';
 
 const emptyAddState = { id: '', first_name: '', last_name: '' };
 
@@ -320,7 +320,7 @@ const StudentRoster = () => {
       </Dialog>
 
       {/* Bulk Import Dialog */}
-      <BulkRRUpdate
+      <BulkPeriodImport
         open={bulkOpen}
         onClose={() => setBulkOpen(false)}
         onComplete={fetchData}

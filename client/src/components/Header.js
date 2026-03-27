@@ -76,7 +76,7 @@ const Header = () => {
           indicatorColor="secondary"
           sx={{ flexGrow: 1 }}
         >
-          <Tab label="Raptor Rotation" onClick={() => navigate('/dashboard')} />
+          <Tab label="Dashboard" onClick={() => navigate('/dashboard')} />
           <Tab label="Requests" onClick={() => navigate('/tutoring')} />
           <Tab label="Events" onClick={() => navigate('/calendar')} />
           <Tab label="Analytics" onClick={() => navigate('/analytics')} />

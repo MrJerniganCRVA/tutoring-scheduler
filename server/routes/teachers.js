@@ -6,7 +6,7 @@ const auth = require('../middleware/auth');
 // @route   GET api/teachers
 // @desc    Get all teachers
 // @access  Public
-router.get('/', auth, async (req, res) => {
+router.get('/', async (req, res) => {
   try {
     const teachers = await Teacher.findAll();
     res.json(teachers);

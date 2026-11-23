@@ -25,6 +25,7 @@ const {
   parseDateOnly
 } = require('../utils/tutoringScope');
 const { removeAttendeeFromEvent, parseEventIds } = require('../utils/calendarService');
+const { isTutoringDay, noPriorityMessage } = require('../utils/schoolCalendar');
 
 // Pull a student off every Google Calendar event a request was sent as (one
 // per contiguous lunch chunk, so an A,B,D booking has two). `teacherId` is the
@@ -290,16 +291,15 @@ router.post('/', auth, async (req, res) => {
   const { studentId, date, lunches, override = false } = req.body;
 
   try {
-    //Check if priority allows
-      let dateObj; 
-      if(typeof date === 'string'){
-        const [year, month, day] = date.split('-').map(num => parseInt(num, 10));
-        dateObj = new Date(year, month - 1, day);
-      } else {
-        dateObj = new Date(date);
-      }
-    const dayOfWeek = dateObj.getDay();
-    if(dayOfWeek ===3 || dayOfWeek === 0 || dayOfWeek===6){
+    // dateObj is what the queries and the new row below use, as before.
+    let dateObj;
+    if(typeof date === 'string'){
+      const [year, month, day] = date.split('-').map(num => parseInt(num, 10));
+      dateObj = new Date(year, month - 1, day);
+    } else {
+      dateObj = new Date(date);
+    }
+    if (!isTutoringDay(dateObj)) {
       return res.status(400).json({msg:'No tutoring allowed on given date'});
     }
     // Check if student exists
@@ -481,6 +481,7 @@ router.get('/priority/:date', (req, res) => {
 
   const dayOfWeek = dateObj.getDay();
   const prioritySubject = getPrioritySubjectForDay(dateObj);
+  const tutoringAllowed = isTutoringDay(dateObj);
   const dayName = dateObj.toLocaleDateString('en-US', {weekday: 'long'});
   
   if (!prioritySubject) {
@@ -489,14 +490,16 @@ router.get('/priority/:date', (req, res) => {
       dateObject: dateObj.toDateString(),
       dayOfWeek: dayOfWeek,
       dayName,
+      tutoringAllowed,
       prioritySubject: null,
-      message: dayOfWeek === 3 ? 'No tutoring on Wednesdays' : 'No tutoring on Weekends'
+      message: noPriorityMessage(dateObj)
     });
   }
   
   res.json({
     date,
     dayName,
+    tutoringAllowed,
     prioritySubject,
     message: `${prioritySubject} has priority on ${dayName}s`
   });

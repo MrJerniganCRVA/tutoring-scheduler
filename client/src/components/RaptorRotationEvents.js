@@ -11,8 +11,10 @@ import {
   Alert
 } from '@mui/material';
 import {useTutoring } from '../contexts/TutoringContext';
+import { useSettings } from '../contexts/SettingsContext';
 
 const RaptorRotationEvents = () => {
+  const { settings } = useSettings();
   // rrSessions is already scoped by the server to today's requests for students
   // in this teacher's Raptor Rotation (including the RR-group mapping, which
   // used to live here as a hardcoded table). Cancelled rows are still filtered
@@ -62,7 +64,7 @@ const RaptorRotationEvents = () => {
             </Table>
           </TableContainer>
           ) : (
-            <Alert severity="info">No one requested from your RR today!</Alert>
+            <Alert severity="info">No one requested from your {settings.homeroomShortLabel} today!</Alert>
           )}
         </Paper>
     </Box>

@@ -34,7 +34,7 @@ Sign-in is Google OAuth only. A person can sign in only if an admin has already 
 
 - **Raptor Rotation** (`/dashboard`) — the home page. **Leaving RR Today** lists your RR students booked elsewhere today, who they're going to, and which lunch; **Coming For Tutoring** lists the students you've booked today. Use **Are you covering today?** to pick another teacher's RR when you're subbing for them and see which of their students should leave (names only, today only).
 - **Requests** (`/tutoring`) — book tutoring for one student or several at once. Pick a date and lunch blocks; the form checks for conflicts with other teachers' bookings before you submit.
-- **Priority scheduling** — Monday CS, Tuesday Math, Thursday Humanities, Friday Science. No tutoring on Wednesdays or weekends. If your subject owns the day and the student is already booked by a teacher of another subject, the app warns you and names that teacher. Confirming the override cancels their booking, sends them an in-app notification, and removes the student from their calendar invite. Any other collision is first come, first served.
+- **Priority scheduling** — each tutoring day can belong to one subject; admins set these on the Settings page. The defaults are Monday CS, Tuesday Math, Thursday Humanities, Friday Science, with no tutoring on Wednesdays or weekends. If your subject owns the day and the student is already booked by a teacher of another subject, the app warns you and names that teacher. Confirming the override cancels their booking, sends them an in-app notification, and removes the student from their calendar invite. Any other collision is first come, first served.
 - **Events** (`/calendar`) — the Tutoring Request List of your upcoming and past sessions, which you can search by student name and cancel, plus Google Calendar invites for them. One invite goes out per run of consecutive lunch blocks (an A+B+D booking becomes two events), with the student as an attendee. You can also mark an invite as sent manually. Cancelling a booking withdraws the student from its invite.
 - **Attendance** — booked students are counted present unless you say otherwise. On today's **Coming For Tutoring** list, tap **Mark absent** for a no-show (the undo arrow reverses it). For an earlier day, switch the Tutoring Request List on the Events page to **Past** and mark it there. Only the teacher who booked a session can mark it, and only on or after its date.
 - **Analytics** (`/analytics`) — your own tutoring over any date range (defaults to this school year): sessions delivered, students tutored, absences, and how many of your class students you haven't tutored yet; charts of sessions per week and per weekday; your upcoming sessions; and **My Students**, a searchable list of everyone you teach or have tutored, with their SPED case manager if they have one. Click a name to see every session you held with that student.
@@ -45,7 +45,7 @@ Sign-in is Google OAuth only. A person can sign in only if an admin has already 
 
 ### For admins
 
-Teachers with `is_admin` set get two extra tabs.
+Teachers with `is_admin` set get three extra tabs.
 
 - **Roster** (`/roster`) — add and edit students and teachers, mark teachers inactive, grant admin, and edit a student's class enrollments. Bulk tools:
   - **Bulk Student Import** — `student_id,first_name,last_name,email,r1_teacher,r2_teacher,rr_teacher,r4_teacher,r5_teacher` (teacher columns take the teacher's email and may be blank).
@@ -59,6 +59,7 @@ Teachers with `is_admin` set get two extra tabs.
   - **Student Lookup** — any student's tutoring, by teacher and subject, over a date range, with a per-session breakdown.
   - **School-wide Trends** — over any date range: sessions per week, by department, by teacher, by grade level, by day of week, and by status.
   - **Download full report** — an Excel workbook from the optional [report service](#optional-excel-report-service).
+- **Settings** (`/settings`) — the school's own rules: names, tutoring days and priority subjects, school year start and grade levels. See [Adapting it to your school](#adapting-it-to-your-school).
 
 ## Tech stack
 
@@ -172,18 +173,24 @@ From the **Roster** tab you can then add the rest of your teachers and students,
 
 The sign-in domain and time zone are environment variables (`ALLOWED_EMAIL_DOMAIN`, `SCHOOL_TIME_ZONE`; see [Configuration](#configuration)).
 
-School policy is moving into **school settings**, stored in the database and changed by admins through `PUT /api/admin/settings` (see [Settings](#settings)). The settings exist now, but the app doesn't read them yet; until it does, these rules are still set in code:
+Admins set the school's own rules on the **Settings** page (`/settings`), with no code changes or restart. They take effect as soon as they're saved:
+
+- School name, the name of the homeroom period ("Raptor Rotation" / "RR" by default) and the calendar invite title
+- Which weekdays have tutoring, and which subject has priority on each
+- The first day of the school year, which date ranges default to
+- Grade levels: on or off, and their names
+
+See [Settings](#settings) for the full list and the API behind the page.
+
+A few rules are still set in code:
 
 | What | Where |
 | --- | --- |
-| Priority subject for each weekday | `getPrioritySubjectForDay` in `server/utils/tutoringQueries.js` (enforced) and `client/src/components/PriorityDatePicker.js` (shown in the date picker) |
 | Lunch block start and end times, used for calendar invites and service minutes | `server/utils/lunchTimes.js` |
-| School year start (August 1), the default lower bound for date ranges | `schoolYearStartDate` in `server/utils/tutoringScope.js` |
 | Shared RRs: teachers who co-teach one RR, mapped to the teacher students are enrolled under | `RR_GROUPS` in `server/utils/tutoringScope.js`. Empty it (`{}`) if every RR has one teacher. |
-| Grade level, inferred from the first two digits of the student ID (the year they entered) | `gradeLevel` in `server/routes/admin.js` |
-| Branding (logo, name, colors) | `client/public/`, `client/src/components/Header.js` |
+| Branding (logo, colors) | `client/public/`, `client/src/App.js` |
 
-Subjects are free text on each teacher. For priority days to work, teachers' subjects must exactly match the names in the priority map (`CS`, `Math`, `Humanities`, `Science` by default).
+Subjects are free text on each teacher. For priority days to work, teachers' subjects must exactly match the subjects entered on the Settings page.
 
 ## Deploying to production
 
@@ -306,7 +313,7 @@ Every route requires a signed-in session unless noted. Admin-only routes return 
 | POST | `/api/tutoring` | Book a session. Returns a conflict if another teacher has the student; send `override: true` to confirm a priority-day override. |
 | PATCH | `/api/tutoring/:id/attendance` | Mark the student absent (`{ "absent": true }`) or present again. Only the booking teacher, and only on or after the session date. |
 | PUT | `/api/tutoring/cancel/:id` | Cancel a request and withdraw the student from its calendar invite. |
-| GET | `/api/tutoring/priority/:date` | The priority subject for a date. No session required. |
+| GET | `/api/tutoring/priority/:date` | The priority subject for a date, and `tutoringAllowed` (whether it's a tutoring day). No session required. |
 | GET | `/api/tutoring/rr-teachers` | Teachers whose RR can be covered (names only). |
 | GET | `/api/tutoring/coverage/:teacherId` | Students leaving that RR today (names only). |
 

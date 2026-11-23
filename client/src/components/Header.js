@@ -19,6 +19,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import SchoolIcon from '@mui/icons-material/School';
 import NotificationsIcon from '@mui/icons-material/Notifications';
 import { useAuth } from '../contexts/AuthContext';
+import { useSettings } from '../contexts/SettingsContext';
 import apiService from '../utils/apiService';
 
 const API_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
@@ -27,6 +28,7 @@ const Header = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { currentUser, clearUser } = useAuth();
+  const { settings } = useSettings();
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [bellAnchor, setBellAnchor] = useState(null);
@@ -107,6 +109,7 @@ const Header = () => {
     if (location.pathname === '/roster') return 4;
     if (location.pathname === '/admin') return 5;
     if (location.pathname === '/caseload') return 6;
+    if (location.pathname === '/settings') return 7;
     return false;
   };
   
@@ -129,7 +132,7 @@ const Header = () => {
       <Toolbar>
         <SchoolIcon sx={{ mr: 2 }} />
         <Typography variant="h6" component="div" sx={{ mr: 2 }}>
-          Tutoring Scheduler
+          {settings.schoolName ? `${settings.schoolName} Tutoring` : 'Tutoring Scheduler'}
         </Typography>
         
         <Tabs 
@@ -138,13 +141,14 @@ const Header = () => {
           indicatorColor="secondary"
           sx={{ flexGrow: 1 }}
         >
-          <Tab label="Raptor Rotation" onClick={() => navigate('/dashboard')} />
+          <Tab label={settings.homeroomLabel} onClick={() => navigate('/dashboard')} />
           <Tab label="Requests" onClick={() => navigate('/tutoring')} />
           <Tab label="Events" onClick={() => navigate('/calendar')} />
           <Tab label="Analytics" onClick={() => navigate('/analytics')} />
           {hasCaseload && <Tab label="Caseload" value={6} onClick={() => navigate('/caseload')} />}
           {isAdmin && <Tab label="Roster" value={4} onClick={() => navigate('/roster')} />}
           {isAdmin && <Tab label="Admin" value={5} onClick={() => navigate('/admin')} />}
+          {isAdmin && <Tab label="Settings" value={7} onClick={() => navigate('/settings')} />}
         </Tabs>
         
         <Box sx={{ display: 'flex', alignItems: 'center' }}>

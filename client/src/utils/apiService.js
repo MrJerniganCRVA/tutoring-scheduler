@@ -235,6 +235,17 @@ const apiService = {
     return await apiClient.patch('/api/notifications/read-all');
   },
 
+  // School settings: the public ones for every teacher, all of them for admins.
+  getSettings: async () => {
+    return apiClient.get('/api/settings');
+  },
+  getAdminSettings: async () => {
+    return apiClient.get('/api/admin/settings');
+  },
+  updateSettings: async (changes) => {
+    return apiClient.put('/api/admin/settings', changes);
+  },
+
   unmarkInviteSent: async (requestId) => {
     return await apiClient.patch(`/api/calendar/unmark-sent/${requestId}`);
   }

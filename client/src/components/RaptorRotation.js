@@ -4,11 +4,13 @@ import { Box, Typography, Alert, CircularProgress, Button } from '@mui/material'
 import { useNavigate } from 'react-router-dom';
 import TutoringRequestListSimple from './TutoringRequestListSimple';
 import RaptorRotationEvents from './RaptorRotationEvents';
+import { useSettings } from '../contexts/SettingsContext';
 import CoverageDialog from './CoverageDialog';
 import { useTutoring } from '../contexts/TutoringContext';
 import { useAuth } from '../contexts/AuthContext';
 
 const RaptorRotation = () => {
+  const { settings } = useSettings();
   const navigate = useNavigate();
   const { loading, error} = useTutoring();
   const { currentUser, authLoading } = useAuth();
@@ -38,7 +40,7 @@ const RaptorRotation = () => {
     <Box>
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1, mb: 1 }}>
         <Typography variant="h4" component="h1">
-          Leaving RR Today
+          Leaving {settings.homeroomShortLabel} Today
         </Typography>
         <Button variant="outlined" onClick={() => setCoverageOpen(true)}>
           Are you covering today?

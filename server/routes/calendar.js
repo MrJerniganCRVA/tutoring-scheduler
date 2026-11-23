@@ -1,6 +1,7 @@
 const express = require('express');
 const { LUNCH_TIMES } = require('../utils/lunchTimes');
 const { schoolTimeZone } = require('../config/deployment');
+const schoolSettings = require('../utils/schoolSettings');
 const router = express.Router();
 const auth = require('../middleware/auth');
 const { upsertCalendarEvent, parseEventIds, joinEventIds } = require('../utils/calendarService');
@@ -90,8 +91,8 @@ router.post('/send-invites', auth, async (req, res) => {
       if (groupAttendees.length === 0) continue;
 
       const eventDetails = {
-        summary: `RR Tutoring - ${req.user.subject}`,
-        description: `Tutoring session today during Raptor Rotation.`,
+        summary: `${schoolSettings.get('calendarEventPrefix')} - ${req.user.subject}`,
+        description: `Tutoring session today during ${schoolSettings.get('homeroomLabel')}.`,
         startDateTime: group.startDateTime,
         endDateTime: group.endDateTime,
         // Include all non-manually-marked students so existing attendees are not dropped

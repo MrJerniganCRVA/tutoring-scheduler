@@ -12,6 +12,8 @@ import AdminDashboard from './components/AdminDashboard';
 import CaseloadPage from './components/CaseloadPage';
 import {TutoringProvider } from './contexts/TutoringContext';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { SettingsProvider } from './contexts/SettingsContext';
+import SchoolSettingsPage from './components/SchoolSettingsPage';
 import Footer from './components/Footer';
 
 const AdminRoute = ({ children }) => {
@@ -55,6 +57,7 @@ const theme = createTheme({
 function App() {
   return (
     <AuthProvider>
+    <SettingsProvider>
     <ThemeProvider theme={theme}>
       <CssBaseline />
       <Router>
@@ -75,6 +78,7 @@ function App() {
             <Route path="/analytics" element={<TeacherDashboard />} />
             <Route path="/roster" element={<AdminRoute><RosterPage /></AdminRoute>} />
             <Route path="/admin" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
+            <Route path="/settings" element={<AdminRoute><SchoolSettingsPage /></AdminRoute>} />
             <Route path="/caseload" element={<CaseloadRoute><CaseloadPage /></CaseloadRoute>} />
             <Route path="/" element={<Navigate to="/select-teacher" replace />} />
             <Route path="*" element={<div>Page Not Found</div>} />
@@ -85,6 +89,7 @@ function App() {
        </Box>
       </Router>
     </ThemeProvider>
+    </SettingsProvider>
     </AuthProvider>
   );
 }

@@ -34,6 +34,7 @@ import {
 } from 'chart.js';
 import { Pie, Bar, Line } from 'react-chartjs-2';
 import apiService from '../utils/apiService';
+import { useSettings } from '../contexts/SettingsContext';
 import { todayDateOnly } from '../utils/dates';
 import DateRangeFields, { defaultRange } from './DateRangeFields';
 import TutoringSummaryTable from './TutoringSummaryTable';
@@ -169,6 +170,7 @@ async function blobErrorMessage(err) {
 }
 
 const TodaySection = ({ today }) => {
+  const rr = useSettings().settings.homeroomShortLabel;
   const [filter, setFilter] = useState('');
   const term = filter.trim().toLowerCase();
   const rows = term
@@ -182,14 +184,14 @@ const TodaySection = ({ today }) => {
           <StatCard label="Priority today" value={today.prioritySubject || 'No tutoring'} color={PINK} />
         </Grid>
         <Grid item xs={12} sm={6}>
-          <StatCard label="Students leaving RR" value={today.uniqueStudents} color={GREEN} />
+          <StatCard label={`Students leaving ${rr}`} value={today.uniqueStudents} color={GREEN} />
         </Grid>
       </Grid>
 
       {/* One row per student so an admin can check a student they meet in the
           hall: are they supposed to be traveling, from where, to whom, when. */}
       <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ sm: 'center' }} spacing={2} sx={{ mb: 1 }}>
-        <Typography variant="h6">Leaving RR Today</Typography>
+        <Typography variant="h6">Leaving {rr} Today</Typography>
         <TextField
           size="small"
           label="Find a student"
@@ -199,7 +201,7 @@ const TodaySection = ({ today }) => {
         />
       </Stack>
       {today.leaving.length === 0 ? (
-        <Alert severity="info">No one is leaving RR for tutoring today.</Alert>
+        <Alert severity="info">No one is leaving {rr} for tutoring today.</Alert>
       ) : rows.length === 0 ? (
         <Alert severity="info">No students match “{filter}”.</Alert>
       ) : (
@@ -217,7 +219,7 @@ const TodaySection = ({ today }) => {
               {rows.map(r => (
                 <TableRow key={r.studentId} hover>
                   <TableCell>{r.studentName}</TableCell>
-                  <TableCell>{r.leavingFrom ?? 'No RR assigned'}</TableCell>
+                  <TableCell>{r.leavingFrom ?? `No ${rr} assigned`}</TableCell>
                   <TableCell>{r.goingTo}</TableCell>
                   <TableCell>{r.lunches.join(', ')}</TableCell>
                 </TableRow>
@@ -303,11 +305,13 @@ const TrendsSection = ({ trends }) => {
             />
           </ChartCard>
         </Grid>
+        {trends.byGradeLevel && (
         <Grid item xs={12} md={6}>
           <ChartCard title="Sessions by Grade Level">
             <Bar data={barData(Object.keys(trends.byGradeLevel), Object.values(trends.byGradeLevel), GREEN)} options={noLegend} />
           </ChartCard>
         </Grid>
+        )}
         <Grid item xs={12} md={6}>
           <ChartCard title="Sessions by Day of Week">
             <Bar data={barData(Object.keys(trends.byDayOfWeek), Object.values(trends.byDayOfWeek), BLUE)} options={noLegend} />

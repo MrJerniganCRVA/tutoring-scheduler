@@ -70,30 +70,9 @@ function toLeanRequest(requestInstance) {
 // teacher who just created it.
 const OWN_REQUEST_INCLUDE = buildRequestInclude('mine', null);
 
-const getPrioritySubjectForDay = (date) => {
-  let dateObj; 
-  if(typeof date === 'string'){
-    const [year, month, day] = date.split('-').map(num => parseInt(num, 10));
-    dateObj = new Date(year, month - 1, day);
-  } else {
-    dateObj = new Date(date);
-  }
-  const dayOfWeek = dateObj.getDay()
-  const priorityMap = {
-    0: null,
-    1: 'CS',
-    2: 'Math',
-    3: null,
-    4: 'Humanities',
-    5: 'Science',
-    6: null
-  };
-  return priorityMap[dayOfWeek];
-};
-const hasSubjectPriority = (teacherSubject, date) =>{
-  const prioritySubject = getPrioritySubjectForDay(date);
-  return teacherSubject === prioritySubject;
-};
+// Priority rules now come from school settings; re-exported here so existing
+// callers keep working.
+const { getPrioritySubjectForDay, hasSubjectPriority } = require('./schoolCalendar');
 
 // The active sessions for a set of students over a date range, with the
 // tutoring teacher's name and subject. Shared by the summary and the

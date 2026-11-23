@@ -16,6 +16,7 @@ import {
   Typography
 } from '@mui/material';
 import apiService from '../utils/apiService';
+import { useSettings } from '../contexts/SettingsContext';
 
 const fullName = (person) => `${person.first_name} ${person.last_name}`;
 
@@ -25,6 +26,7 @@ const fullName = (person) => `${person.first_name} ${person.last_name}`;
 // lunches), so this can't be used to browse who is being tutored by whom.
 // Kept self-contained so it never disturbs the teacher's own RR board.
 const CoverageDialog = ({ open, onClose }) => {
+  const rr = useSettings().settings.homeroomShortLabel;
   const [teachers, setTeachers] = useState([]);
   const [selected, setSelected] = useState(null);
   const [students, setStudents] = useState(null);
@@ -64,7 +66,7 @@ const CoverageDialog = ({ open, onClose }) => {
   return (
     <Dialog open={open} onClose={handleClose} fullWidth maxWidth="xs">
       <DialogTitle>
-        {selected ? `Covering ${fullName(selected)}'s RR` : 'Are you covering today?'}
+        {selected ? `Covering ${fullName(selected)}'s ${rr}` : 'Are you covering today?'}
         <Typography variant="body2" color="text.secondary">{today}</Typography>
       </DialogTitle>
       <DialogContent dividers>
@@ -75,7 +77,7 @@ const CoverageDialog = ({ open, onClose }) => {
           getOptionLabel={fullName}
           isOptionEqualToValue={(a, b) => a.id === b.id}
           renderInput={(params) => (
-            <TextField {...params} label="Whose RR are you covering?" autoFocus />
+            <TextField {...params} label={`Whose ${rr} are you covering?`} autoFocus />
           )}
           sx={{ mb: 2 }}
         />
@@ -91,7 +93,7 @@ const CoverageDialog = ({ open, onClose }) => {
         {!loading && students && (students.length > 0 ? (
           <>
             <Typography variant="subtitle2" color="text.secondary">
-              Leaving RR today ({students.length})
+              Leaving {rr} today ({students.length})
             </Typography>
             <List dense>
               {students.map(student => (
@@ -102,7 +104,7 @@ const CoverageDialog = ({ open, onClose }) => {
             </List>
           </>
         ) : (
-          <Alert severity="info">No one is leaving this RR for tutoring today.</Alert>
+          <Alert severity="info">No one is leaving this {rr} for tutoring today.</Alert>
         ))}
       </DialogContent>
       <DialogActions>

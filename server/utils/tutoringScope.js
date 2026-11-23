@@ -28,15 +28,10 @@ function resolveRRMainTeacherId(teacherId) {
   return RR_GROUPS[id] || id;
 }
 
-// School years run August-July, so anything on or after Aug 1 belongs to the
-// year that just started. Used as the default lower bound on a teacher's own
-// requests, which keeps "search my past requests by student name" working
-// without shipping every year ever recorded.
-function schoolYearStartDate(now = new Date()) {
-  const AUGUST = 7; // zero-indexed
-  const year = now.getMonth() >= AUGUST ? now.getFullYear() : now.getFullYear() - 1;
-  return `${year}-08-01`;
-}
+// Default lower bound on a teacher's own requests, which keeps "search my
+// past requests by student name" working without shipping every year ever
+// recorded. The start date is a school setting (see utils/schoolCalendar.js).
+const { schoolYearStartDate } = require('./schoolCalendar');
 
 // TutoringRequest.date is a DATEONLY, so it compares cleanly against
 // 'YYYY-MM-DD' strings - no timezone shifting on the way in or out.

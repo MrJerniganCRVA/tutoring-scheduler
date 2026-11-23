@@ -1,5 +1,3 @@
-//Need to implement mui component and add in context to the app
-
 import React, { useState, useEffect } from 'react';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -7,16 +5,18 @@ import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { Box, Chip, Alert, Typography } from '@mui/material';
 import { useTutoring } from '../contexts/TutoringContext';
 import { useAuth } from '../contexts/AuthContext';
+import { useSettings } from '../contexts/SettingsContext';
 import apiService from '../utils/apiService';
 import { toDateOnly } from '../utils/dates';
 
-// Priority mapping
-const SUBJECT_PRIORITIES = {
-  1: 'CS',        // Monday
-  2: 'Math',      // Tuesday  
-  4: 'Humanities', // Thursday
-  5: 'Science'    // Friday
-};
+const WEEKDAY_ABBR = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+// "Mon(CS) | Tue(Math) | ..." for the tutoring days that have a priority subject.
+const priorityCaption = (priorities, noTutoringDays) =>
+  [1, 2, 3, 4, 5, 6, 0]
+    .filter(day => priorities[day] && !noTutoringDays.includes(day))
+    .map(day => `${WEEKDAY_ABBR[day]}(${priorities[day]})`)
+    .join(' | ');
 
 const PriorityDatePicker = ({ 
   studentId,
@@ -26,6 +26,12 @@ const PriorityDatePicker = ({
 }) => {
   const { fetchStudentSessions } = useTutoring();
   const { currentUser } = useAuth();
+  const { settings } = useSettings();
+  // The server enforces both rules; the picker mirrors them so teachers can't
+  // pick a day the server would reject.
+  const SUBJECT_PRIORITIES = settings.priorityByWeekday;
+  const noTutoringDays = settings.noTutoringWeekdays;
+  const caption = priorityCaption(SUBJECT_PRIORITIES, noTutoringDays);
   const [currentTeacher, setCurrentTeacher] = useState(null);
   const [dateStatus, setDateStatus] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -82,8 +88,8 @@ const PriorityDatePicker = ({
     if(date < yesteday) return true;
     const dayOfWeek = date.getDay();
     
-    // Disable weekends and Wednesday
-    if (dayOfWeek === 0 || dayOfWeek === 6 || dayOfWeek === 3) {
+    // Disable the school's no-tutoring days (by default Wednesdays and weekends)
+    if (noTutoringDays.includes(dayOfWeek)) {
       return true;
     }
     
@@ -206,9 +212,11 @@ const PriorityDatePicker = ({
             )}
           </Box>
         )}
-        <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-          Priority: Mon(CS) | Tue(Math) | Thu(Humanities) | Fri(Science) 
-        </Typography>
+        {caption && (
+          <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+            Priority: {caption}
+          </Typography>
+        )}
       </Box>
     </LocalizationProvider>
   );

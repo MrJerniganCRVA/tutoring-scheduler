@@ -20,6 +20,7 @@ const {
   resolveRange
 } = require('../utils/tutoringScope');
 const schoolSettings = require('../utils/schoolSettings');
+const { gradeLevel, gradeLevelBuckets } = require('../utils/schoolCalendar');
 
 // Everything in this file is mounted behind auth + requireAdmin in server.js.
 
@@ -46,13 +47,9 @@ function weekStart(date) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
-// Student ids start with the two-digit year they entered (e.g. 25xxxx), the
-// same rule the tutoring-analytics-report repo's Student.getGradeLevel uses.
-function gradeLevel(studentId, schoolYearStart) {
-  const startYear = parseInt(String(studentId).slice(0, 2), 10);
-  const years = (schoolYearStart % 100) - startYear;
-  return ['9th', '10th', '11th', '12th'][years] || 'Other';
-}
+// Grade is inferred from the student ID's first two digits (see
+// utils/schoolCalendar.js), the same rule the tutoring-analytics-report repo's
+// Student.getGradeLevel uses.
 
 // Teachers who share an RR with `mainId` (see RR_GROUPS), so the admin view
 // can show who the board actually belongs to.
@@ -215,9 +212,12 @@ router.get('/trends', async (req, res) => {
       .sort((a, b) => b.sessions - a.sessions);
 
     const yearStart = parseInt(schoolYearStartDate(dateFromDateOnly(to)).slice(0, 4), 10);
-    const byGradeLevel = { '9th': 0, '10th': 0, '11th': 0, '12th': 0, Other: 0 };
-    for (const row of perStudent) {
-      byGradeLevel[gradeLevel(row.StudentId, yearStart)] += parseInt(row.count, 10);
+    // null when the school has turned grade levels off.
+    const byGradeLevel = gradeLevelBuckets();
+    if (byGradeLevel) {
+      for (const row of perStudent) {
+        byGradeLevel[gradeLevel(row.StudentId, yearStart)] += parseInt(row.count, 10);
+      }
     }
 
     const tutoredIds = perStudent.map(r => r.StudentId);

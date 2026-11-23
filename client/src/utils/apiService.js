@@ -11,16 +11,15 @@ const apiClient = axios.create({
   }
 });
 
-// Add a request interceptor to include teacher ID in headers
-apiClient.interceptors.request.use(
-  config => {
-    const teacherId = localStorage.getItem('teacherId');
-    if (teacherId) {
-      config.headers['x-teacher-id'] = teacherId;
-    }
-    return config;
-  },
+// Redirect to login on session expiry
+apiClient.interceptors.response.use(
+  response => response,
   error => {
+    if (error.response?.status === 401 && window.location.pathname !== '/select-teacher') {
+      localStorage.removeItem('teacherId');
+      localStorage.removeItem('teacherName');
+      window.location.href = '/select-teacher';
+    }
     return Promise.reject(error);
   }
 );
@@ -38,6 +37,14 @@ const apiService = {
   
   createTeacher: async (teacherData) => {
     return apiClient.post('/api/teachers', teacherData);
+  },
+
+  updateTeacher: async (id, data) => {
+    return apiClient.put(`/api/teachers/${id}`, data);
+  },
+
+  bulkCreateTeachers: async (teachers) => {
+    return apiClient.post('/api/teachers/bulk-create', { teachers });
   },
   
   // Student endpoints
@@ -57,13 +64,41 @@ const apiService = {
     return apiClient.put(`/api/students/${id}`, data);
   },
 
-  bulkUpdateSlots: async (updates) => {
-    return apiClient.post('/api/students/bulk-slots', { updates });
+  // period is 'RR' or 'SPED' (case manager); updates are { studentId, teacherId }.
+  bulkUpdateEnrollment: async (period, updates) => {
+    return apiClient.post('/api/students/bulk-enrollment', { period, updates });
+  },
+
+  // SPED caseload: tutoring summary for the signed-in teacher's own caseload.
+  getCaseload: async (params = {}) => {
+    return apiClient.get('/api/caseload', { params });
+  },
+
+  // Admin student lookup: one student's tutoring summary.
+  getStudentTutoring: async (studentId, params = {}) => {
+    return apiClient.get(`/api/admin/students/${studentId}/tutoring`, { params });
+  },
+
+  // Per-student session detail (dates, lunches, minutes) for the name popup:
+  // caseload-scoped for case managers, any student for admins.
+  getCaseloadStudentSessions: async (studentId, params = {}) => {
+    return apiClient.get(`/api/caseload/students/${studentId}/sessions`, { params });
+  },
+
+  getStudentSessions: async (studentId, params = {}) => {
+    return apiClient.get(`/api/admin/students/${studentId}/sessions`, { params });
+  },
+
+  bulkCreateStudents: async (students) => {
+    return apiClient.post('/api/students/bulk-create', { students });
   },
   
   // Tutoring request endpoints
-  getTutoringRequests: async () => {
-    return apiClient.get('/api/tutoring');
+  // params narrow what comes back - see GET /api/tutoring for the supported
+  // scopes. Called with no params it returns this teacher's requests for the
+  // current school year.
+  getTutoringRequests: async (params = {}) => {
+    return apiClient.get('/api/tutoring', { params });
   },
   
   createTutoringRequest: async (requestData) => {
@@ -83,8 +118,38 @@ const apiService = {
     return apiClient.get(`/api/tutoring/priority/${date}`);
   },
   
+  // "Are you covering today?" - RR teachers to pick from, then today's
+  // leaving list for the chosen RR (student names only).
+  getRRTeachers: async () => {
+    return apiClient.get('/api/tutoring/rr-teachers');
+  },
+
+  getCoverageList: async (teacherId) => {
+    return apiClient.get(`/api/tutoring/coverage/${teacherId}`);
+  },
+
+  // Admin dashboard
+  getAdminToday: async () => {
+    return apiClient.get('/api/admin/today');
+  },
+
+  getAdminTrends: async (params = {}) => {
+    return apiClient.get('/api/admin/trends', { params });
+  },
+
+  // Runs the Kotlin report service, which may be waking from sleep - so a long
+  // timeout, and a Blob response the caller saves as a file.
+  downloadReport: async () => {
+    return apiClient.get('/api/admin/report', { responseType: 'blob', timeout: 150000 });
+  },
+
   cancelTutoringRequest: async (requestId) => {
     return apiClient.put(`/api/tutoring/cancel/${requestId}`);
+  },
+
+  // Mark a session's student absent (true) or back to present (false).
+  setAttendance: async (requestId, absent) => {
+    return apiClient.patch(`/api/tutoring/${requestId}/attendance`, { absent });
   },
   
   // Enhanced error formatting to handle conflict responses
@@ -96,6 +161,18 @@ const apiService = {
       // that falls out of the range of 2xx
       if (error.response.data && error.response.data.msg) {
         errorMessage = error.response.data.msg;
+
+        // The non-overridable conflicts (403 existing-teacher-has-priority,
+        // 400 same-subject, 400 first-come-first-served) all ship the incumbent
+        // teacher's name in `conflict`, but `msg` alone never mentions them -
+        // so the teacher was left reading "Request denied" with no idea who
+        // holds the student.
+        const conflict = error.response.data.conflict;
+        if (conflict && conflict.existingTeacher) {
+          errorMessage += ` - already requested by ${conflict.existingTeacher}`;
+          if (conflict.existingSubject) errorMessage += ` (${conflict.existingSubject})`;
+          if (conflict.reason) errorMessage += `. ${conflict.reason}`;
+        }
       } else {
         errorMessage = `Server error: ${error.response.status}`;
       }
@@ -126,64 +203,16 @@ const apiService = {
     return null;
   },
 
-  // Period endpoints (admin-managed)
-  getPeriods: async () => {
-    return apiClient.get('/api/admin/periods');
+  // Teacher analytics: the teacher's own tutoring over a from/to range.
+  getTeacherAnalytics: async (teacherId, params = {}) => {
+    return apiClient.get(`/api/analytics/${teacherId}`, { params });
   },
-  createPeriod: async (data) => {
-    return apiClient.post('/api/admin/periods', data);
+  // Students the teacher teaches or tutored, with their own sessions/minutes.
+  getTeacherStudents: async (teacherId, params = {}) => {
+    return apiClient.get(`/api/analytics/${teacherId}/students`, { params });
   },
-  updatePeriod: async (id, data) => {
-    return apiClient.put(`/api/admin/periods/${id}`, data);
-  },
-  deletePeriod: async (id) => {
-    return apiClient.delete(`/api/admin/periods/${id}`);
-  },
-
-  // Student period assignment endpoints
-  updateStudentPeriods: async (studentId, assignments) => {
-    return apiClient.put(`/api/students/${studentId}/periods`, assignments);
-  },
-
-  bulkUpdatePeriods: async (updates) => {
-    return apiClient.post('/api/students/bulk-periods', { updates });
-  },
-
-  // Tutoring slot endpoints
-  // Public read (used by request form for all teachers)
-  getTutoringSlots: async () => {
-    return apiClient.get('/api/tutoring/slots');
-  },
-  // Admin-only mutations
-
-  createTutoringSlot: async (data) => {
-    return apiClient.post('/api/admin/tutoring-slots', data);
-  },
-  updateTutoringSlot: async (id, data) => {
-    return apiClient.put(`/api/admin/tutoring-slots/${id}`, data);
-  },
-  deleteTutoringSlot: async (id) => {
-    return apiClient.delete(`/api/admin/tutoring-slots/${id}`);
-  },
-
-  // School config (admin-managed)
-  getAdminConfig: async () => {
-    return apiClient.get('/api/admin/config');
-  },
-  updateAdminConfig: async (updates) => {
-    return apiClient.put('/api/admin/config', updates);
-  },
-
-  // Scheduling config (no_tutoring_days, priority map) — no auth required
-  getScheduleConfig: async () => {
-    return apiClient.get('/api/tutoring/schedule-config');
-  },
-
-  getTeacherAnalytics: async (teacherId) => {
-    return await apiClient.get(`/api/analytics/${teacherId}`);
-  },
-  getStudentHistory: async (teacherId, studentId) => {
-    return await apiClient.get(`/api/analytics/${teacherId}/student/${studentId}`);
+  getTeacherStudentSessions: async (teacherId, studentId, params = {}) => {
+    return apiClient.get(`/api/analytics/${teacherId}/students/${studentId}/sessions`, { params });
   },
   getPendingInviteCount: async () => {
     return await apiClient.get('/api/calendar/pending-count');
@@ -194,6 +223,18 @@ const apiService = {
   markInviteSent: async (requestId) => {
     return await apiClient.patch(`/api/calendar/mark-sent/${requestId}`);
   },
+  getNotifications: async ({ unreadOnly = false } = {}) => {
+    return await apiClient.get('/api/notifications', {
+      params: unreadOnly ? { unread: 'true' } : {}
+    });
+  },
+  markNotificationRead: async (notificationId) => {
+    return await apiClient.patch(`/api/notifications/${notificationId}/read`);
+  },
+  markAllNotificationsRead: async () => {
+    return await apiClient.patch('/api/notifications/read-all');
+  },
+
   unmarkInviteSent: async (requestId) => {
     return await apiClient.patch(`/api/calendar/unmark-sent/${requestId}`);
   }

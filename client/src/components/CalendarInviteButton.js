@@ -3,18 +3,20 @@ import { Button, CircularProgress, Snackbar, Alert } from '@mui/material';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 import apiService from '../utils/apiService';
 import { useTutoring } from '../contexts/TutoringContext';
+import { useAuth } from '../contexts/AuthContext';
+import { todayDateOnly } from '../utils/dates';
 
 function CalendarInviteButton() {
   const { sessions, refreshSessions } = useTutoring();
+  const { currentUser } = useAuth();
   const [sending, setSending] = useState(false);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
 
-  const today = new Date().toISOString().split('T')[0];
-  const teacherId = parseInt(localStorage.getItem('teacherId'));
+  const today = todayDateOnly();
   const pendingCount = sessions.filter(s =>
     s.date >= today &&
     !s.invite_sent &&
-    s.TeacherId === teacherId
+    s.TeacherId === currentUser?.id
   ).length;
 
   const handleSendInvites = async () => {

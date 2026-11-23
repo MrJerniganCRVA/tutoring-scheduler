@@ -2,131 +2,128 @@ const express = require('express');
 const router = express.Router();
 const Student = require('../models/Student');
 const Teacher = require('../models/Teacher');
-const TutoringSlot = require('../models/TutoringSlot');
-const Period = require('../models/Period');
-const StudentPeriodAssignment = require('../models/StudentPeriodAssignment');
+const Enrollment = require('../models/Enrollment');
 const auth = require('../middleware/auth');
+const requireAdmin = require('../middleware/requireAdmin');
+const { STUDENT_ENROLLMENT_INCLUDE, reshapeStudent, setEnrollments } = require('../utils/enrollments');
+
+// @route   GET api/students/teacher/:teacherId
+// @desc    Get all students with any class assignment (any period) for a specific teacher
+// @access  Private
+router.get('/teacher/:teacherId', auth, async (req, res) => {
+  try {
+    const teacherId = req.params.teacherId;
+    const studentIds = (
+      await Enrollment.findAll({ where: { TeacherId: teacherId }, attributes: ['StudentId'] })
+    ).map(e => e.StudentId);
+
+    const students = await Student.findAll({
+      where: { id: studentIds },
+      include: [STUDENT_ENROLLMENT_INCLUDE]
+    });
+    res.json(students.map(reshapeStudent));
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).send('Server Error');
+  }
+});
 
 // @route   GET api/students
-// @desc    Get all students with their tutoring slots and period assignments
-// @access  Public
-router.get('/', async (req, res) => {
+// @desc    Get all students
+// @access  Private
+router.get('/', auth, async (req, res) => {
   try {
     const students = await Student.findAll({
-      include: [
-        { model: TutoringSlot, through: { attributes: [] } },
-        {
-          model: StudentPeriodAssignment,
-          include: [
-            { model: Teacher, attributes: ['id', 'first_name', 'last_name', 'subject'] },
-            { model: Period, attributes: ['id', 'name', 'order'] }
-          ]
-        }
-      ]
+      include: [STUDENT_ENROLLMENT_INCLUDE]
     });
-    res.json(students);
+    res.json(students.map(reshapeStudent));
   } catch (err) {
     console.error(err.message);
     res.status(500).send('Server Error');
   }
 });
 
-// @route   GET api/students/:id/periods
-// @desc    Get all period assignments for a student
-// @access  Public
-router.get('/:id/periods', async (req, res) => {
+// Thrown for expected, client-facing failures (bad input, duplicates) so callers
+// can distinguish them from unexpected server errors and respond 400 vs 500.
+class StudentInputError extends Error {}
+
+// Shared creation logic used by both the single-student and bulk-import routes.
+// R1Id/R2Id/RRId/R4Id/R5Id here are teacher IDs (or null/undefined) for each
+// named period - internally these become Enrollment rows, not columns.
+async function createStudentRecord({ id, first_name, last_name, email, R1Id, R2Id, RRId, R4Id, R5Id }) {
+  const id_exists = await Student.findByPk(id);
+  if (id_exists) {
+    throw new StudentInputError(`Student ID ${id} already exists.`);
+  }
+  const name_exists = await Student.findOne({ where: { first_name, last_name } });
+  if (name_exists) {
+    throw new StudentInputError('Student already exists. Consider Updating instead of POST');
+  }
+
+  let student;
   try {
-    const student = await Student.findByPk(req.params.id);
-    if (!student) return res.status(404).json({ msg: 'Student not found' });
-    const assignments = await StudentPeriodAssignment.findAll({
-      where: { StudentId: req.params.id },
-      include: [
-        { model: Teacher, attributes: ['id', 'first_name', 'last_name', 'subject'] },
-        { model: Period, attributes: ['id', 'name', 'order'] }
-      ],
-      order: [[Period, 'order', 'ASC']]
+    student = await Student.create({ id, first_name, last_name, email });
+  } catch (err) {
+    if (err.name === 'SequelizeValidationError' || err.name === 'SequelizeUniqueConstraintError') {
+      throw new StudentInputError(err.errors?.[0]?.message || 'Invalid student data.');
+    }
+    throw err;
+  }
+
+  await setEnrollments(student.id, { R1: R1Id, R2: R2Id, RR: RRId, R4: R4Id, R5: R5Id });
+  return student;
+}
+
+// @route   POST api/students
+// @desc    Add a new student
+// @access  Private
+router.post('/', auth, async (req, res) => {
+  const { id, first_name, last_name, email, teachers } = req.body;
+  try {
+    const student = await createStudentRecord({
+      id,
+      first_name,
+      last_name,
+      email,
+      R1Id: teachers?.R1 || null,
+      R2Id: teachers?.R2 || null,
+      RRId: teachers?.RR || null,
+      R4Id: teachers?.R4 || null,
+      R5Id: teachers?.R5 || null
     });
-    res.json(assignments);
+    const newStudent = await Student.findByPk(student.id, { include: [STUDENT_ENROLLMENT_INCLUDE] });
+    res.json(reshapeStudent(newStudent));
   } catch (err) {
+    if (err instanceof StudentInputError) {
+      return res.status(400).json({ msg: err.message });
+    }
     console.error(err.message);
     res.status(500).send('Server Error');
   }
 });
 
-// @route   PUT api/students/:id/periods
-// @desc    Replace all period assignments for a student
+// @route   POST api/students/bulk-create
+// @desc    Bulk-create students (e.g. onboarding a new year's population from CSV)
 // @access  Admin only
-// Body: [{ periodId, teacherId }]
-router.put('/:id/periods', auth, async (req, res) => {
+router.post('/bulk-create', auth, requireAdmin, async (req, res) => {
   try {
-    const requestingTeacher = await Teacher.findByPk(req.teacher.id);
-    if (!requestingTeacher?.is_admin) {
-      return res.status(403).json({ msg: 'Admin access required' });
-    }
-    const student = await Student.findByPk(req.params.id);
-    if (!student) return res.status(404).json({ msg: 'Student not found' });
-
-    const assignments = req.body;
-    if (!Array.isArray(assignments)) {
-      return res.status(400).json({ msg: 'Body must be an array of { periodId, teacherId }' });
-    }
-
-    await StudentPeriodAssignment.destroy({ where: { StudentId: req.params.id } });
-    for (const { periodId, teacherId } of assignments) {
-      if (periodId && teacherId) {
-        await StudentPeriodAssignment.create({
-          StudentId: req.params.id,
-          PeriodId: periodId,
-          TeacherId: teacherId
-        });
-      }
-    }
-    res.json({ msg: 'Period assignments updated' });
-  } catch (err) {
-    console.error(err.message);
-    res.status(500).send('Server Error');
-  }
-});
-
-// @route   POST api/students/bulk-periods
-// @desc    Bulk replace period assignments for multiple students
-// @access  Admin only
-// Body: { updates: [{ studentId, assignments: [{ periodId, teacherId }] }] }
-router.post('/bulk-periods', auth, async (req, res) => {
-  try {
-    const requestingTeacher = await Teacher.findByPk(req.teacher.id);
-    if (!requestingTeacher?.is_admin) {
-      return res.status(403).json({ msg: 'Admin access required' });
-    }
-
-    const { updates } = req.body;
-    if (!Array.isArray(updates) || updates.length === 0) {
-      return res.status(400).json({ msg: 'updates array is required' });
+    const { students } = req.body;
+    if (!Array.isArray(students) || students.length === 0) {
+      return res.status(400).json({ msg: 'students array is required' });
     }
 
     const succeeded = [];
     const failed = [];
 
-    for (const { studentId, assignments } of updates) {
+    for (const studentData of students) {
       try {
-        const student = await Student.findByPk(studentId);
-        if (!student) {
-          failed.push({ studentId, reason: 'Student not found' });
-          continue;
-        }
-        await StudentPeriodAssignment.destroy({ where: { StudentId: studentId } });
-        for (const { periodId, teacherId } of assignments) {
-          if (periodId && teacherId) {
-            await StudentPeriodAssignment.create({
-              StudentId: studentId,
-              PeriodId: periodId,
-              TeacherId: teacherId
-            });
-          }
-        }
-        succeeded.push(studentId);
+        const student = await createStudentRecord(studentData);
+        succeeded.push(student.id);
       } catch (rowErr) {
-        failed.push({ studentId, reason: rowErr.message });
+        if (!(rowErr instanceof StudentInputError)) {
+          console.error(rowErr.message);
+        }
+        failed.push({ studentId: studentData.id, reason: rowErr.message });
       }
     }
 
@@ -137,43 +134,62 @@ router.post('/bulk-periods', auth, async (req, res) => {
   }
 });
 
-// @route   GET api/students/:id
-// @desc    Get a single student with their tutoring slots and period assignments
-// @access  Public
-router.get('/:id', async (req, res) => {
+// Periods that can be bulk-assigned from a CSV: RR homerooms, and SPED
+// caseloads (case manager per student).
+const BULK_PERIODS = ['RR', 'SPED'];
+
+async function applyBulkEnrollment(period, updates) {
+  const succeeded = [];
+  const failed = [];
+
+  for (const { studentId, teacherId } of updates) {
+    try {
+      const student = await Student.findByPk(studentId);
+      if (!student) {
+        failed.push({ studentId, reason: 'Student not found' });
+        continue;
+      }
+      await setEnrollments(studentId, { [period]: teacherId });
+      succeeded.push(studentId);
+    } catch (rowErr) {
+      failed.push({ studentId, reason: rowErr.message });
+    }
+  }
+
+  return { succeeded, failed };
+}
+
+// @route   POST api/students/bulk-enrollment
+// @desc    Bulk set one period's teacher (RR or SPED case manager) per student
+// @access  Admin only
+router.post('/bulk-enrollment', auth, requireAdmin, async (req, res) => {
   try {
-    const student = await Student.findByPk(req.params.id, {
-      include: [
-        { model: TutoringSlot, through: { attributes: [] } },
-        {
-          model: StudentPeriodAssignment,
-          include: [
-            { model: Teacher, attributes: ['id', 'first_name', 'last_name', 'subject'] },
-            { model: Period, attributes: ['id', 'name', 'order'] }
-          ]
-        }
-      ]
-    });
-    if (!student) return res.status(404).json({ msg: 'Student not found' });
-    res.json(student);
+    const { period, updates } = req.body;
+    if (!BULK_PERIODS.includes(period)) {
+      return res.status(400).json({ msg: `period must be one of ${BULK_PERIODS.join(', ')}` });
+    }
+    if (!Array.isArray(updates) || updates.length === 0) {
+      return res.status(400).json({ msg: 'updates array is required' });
+    }
+    res.json(await applyBulkEnrollment(period, updates));
   } catch (err) {
     console.error(err.message);
     res.status(500).send('Server Error');
   }
 });
 
-// @route   POST api/students
-// @desc    Add a new student
-// @access  Public
-router.post('/', async (req, res) => {
-  const { id, first_name, last_name, email } = req.body;
+// @route   POST api/students/bulk-rr
+// @desc    Bulk update RR teacher assignments (kept for existing callers;
+//          same as bulk-enrollment with period 'RR')
+// @access  Admin only
+router.post('/bulk-rr', auth, requireAdmin, async (req, res) => {
   try {
-    let student_exists = await Student.findOne({ where: { first_name, last_name } });
-    if (student_exists) {
-      return res.status(400).json({ msg: 'Student already exists. Consider updating instead.' });
+    const { updates } = req.body;
+    if (!Array.isArray(updates) || updates.length === 0) {
+      return res.status(400).json({ msg: 'updates array is required' });
     }
-    const student = await Student.create({ id, first_name, last_name, email });
-    res.json(student);
+    const normalized = updates.map(({ studentId, rrTeacherId }) => ({ studentId, teacherId: rrTeacherId }));
+    res.json(await applyBulkEnrollment('RR', normalized));
   } catch (err) {
     console.error(err.message);
     res.status(500).send('Server Error');
@@ -181,67 +197,37 @@ router.post('/', async (req, res) => {
 });
 
 // @route   PUT api/students/:id
-// @desc    Update a student's basic info
+// @desc    Update a student's teacher assignments (any period, not just the
+//          five named rotation slots - pass any period key to add/change/clear it)
 // @access  Admin only
-router.put('/:id', auth, async (req, res) => {
+router.put('/:id', auth, requireAdmin, async (req, res) => {
   try {
-    const requestingTeacher = await Teacher.findByPk(req.teacher.id);
-    if (!requestingTeacher?.is_admin) {
-      return res.status(403).json({ msg: 'Admin access required' });
-    }
-
     const student = await Student.findByPk(req.params.id);
     if (!student) return res.status(404).json({ msg: 'Student not found' });
 
-    const { first_name, last_name, email } = req.body;
-    const updates = {};
-    if (first_name !== undefined) updates.first_name = first_name;
-    if (last_name !== undefined) updates.last_name = last_name;
-    if (email !== undefined) updates.email = email;
-
-    await student.update(updates);
-    res.json(student);
-  } catch (err) {
-    console.error(err.message);
-    res.status(500).send('Server Error');
-  }
-});
-
-// @route   POST api/students/bulk-slots
-// @desc    Bulk update student tutoring slot assignments
-// @access  Admin only
-router.post('/bulk-slots', auth, async (req, res) => {
-  try {
-    const requestingTeacher = await Teacher.findByPk(req.teacher.id);
-    if (!requestingTeacher?.is_admin) {
-      return res.status(403).json({ msg: 'Admin access required' });
+    const { R1Id, R2Id, RRId, R4Id, R5Id, enrollments } = req.body;
+    const periodMap = {};
+    for (const [period, val] of Object.entries({ R1: R1Id, R2: R2Id, RR: RRId, R4: R4Id, R5: R5Id })) {
+      if (val !== undefined) periodMap[period] = val;
     }
-
-    const { updates } = req.body;
-    if (!Array.isArray(updates) || updates.length === 0) {
-      return res.status(400).json({ msg: 'updates array is required' });
-    }
-
-    const succeeded = [];
-    const failed = [];
-
-    for (const { studentId, slotIds } of updates) {
-      try {
-        const student = await Student.findByPk(studentId);
-        if (!student) {
-          failed.push({ studentId, reason: 'Student not found' });
-          continue;
-        }
-        if (Array.isArray(slotIds)) {
-          await student.setTutoringSlots(slotIds);
-        }
-        succeeded.push(studentId);
-      } catch (rowErr) {
-        failed.push({ studentId, reason: rowErr.message });
+    // Optional: arbitrary extra periods, e.g. { period: 'Online-CS', teacherId: 7 }
+    if (Array.isArray(enrollments)) {
+      for (const { period, teacherId } of enrollments) {
+        if (period) periodMap[period] = teacherId ?? null;
       }
     }
 
-    res.json({ succeeded, failed });
+    for (const [period, val] of Object.entries(periodMap)) {
+      if (val !== null) {
+        const exists = await Teacher.findByPk(val);
+        if (!exists) return res.status(400).json({ msg: `Teacher ${val} not found` });
+      }
+    }
+
+    await setEnrollments(req.params.id, periodMap);
+
+    const updated = await Student.findByPk(req.params.id, { include: [STUDENT_ENROLLMENT_INCLUDE] });
+    res.json(reshapeStudent(updated));
   } catch (err) {
     console.error(err.message);
     res.status(500).send('Server Error');

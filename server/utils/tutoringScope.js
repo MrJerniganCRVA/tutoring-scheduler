@@ -50,9 +50,9 @@ function parseDateOnly(value) {
 }
 
 // "Today" as the school sees it. The server runs in UTC, so a plain
-// toISOString() rolls over to tomorrow during the evening in Virginia; the
+// toISOString() rolls over to tomorrow during the evening in US time zones; the
 // coverage and admin views pin the day server-side and must not drift.
-const SCHOOL_TIME_ZONE = 'America/New_York';
+const { schoolTimeZone: SCHOOL_TIME_ZONE } = require('../config/deployment');
 
 function schoolTodayDateOnly(now = new Date()) {
   // en-CA formats as YYYY-MM-DD.

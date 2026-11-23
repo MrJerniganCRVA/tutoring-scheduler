@@ -1,3 +1,4 @@
+require('./env');
 const { Sequelize } = require('sequelize');
 
 // Debug logging
@@ -13,11 +14,13 @@ let sequelize;
 
 if (process.env.DATABASE_URL) {
   console.log('Using PostgreSQL in production');
+  // SSL is on by default, as managed Postgres hosts require it. Set
+  // DB_SSL=false for a database on the same machine or a private network
+  // that doesn't offer SSL. The certificate isn't verified either way.
+  const useSsl = process.env.DB_SSL !== 'false';
   sequelize = new Sequelize(process.env.DATABASE_URL, {
     dialect: 'postgres',
-    dialectOptions: {
-      ssl: { require: true, rejectUnauthorized: false }
-    }
+    dialectOptions: useSsl ? { ssl: { require: true, rejectUnauthorized: false } } : {}
   });
 } else {
   console.log('Using SQLite for local development');

@@ -101,7 +101,7 @@ cd rr-tutoring-app/server && npm install
 cp .env.example .env
 ```
 
-Edit `server/.env` and fill in at least `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` and `SESSION_SECRET` (any long random string, e.g. the output of `openssl rand -hex 32`). The defaults for everything else work locally. See [Configuration](#configuration) for every variable.
+Edit `server/.env` and fill in at least `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `SESSION_SECRET` and `ALLOWED_EMAIL_DOMAIN` (any long random string, e.g. the output of `openssl rand -hex 32`). The defaults for everything else work locally. See [Configuration](#configuration) for every variable.
 
 ```bash
 cd ../client && npm install
@@ -151,9 +151,12 @@ From the **Roster** tab you can then add the rest of your teachers and students,
 | `CALLBACK_URL` | Yes | The server's OAuth callback, e.g. `http://localhost:5000/auth/google/callback`. Must match a redirect URI on the OAuth client. |
 | `CLIENT_URL` | Yes | The frontend's origin, e.g. `http://localhost:3000`. Used for CORS and for redirects after sign-in. |
 | `SESSION_SECRET` | Yes | Secret used to sign session cookies. Use a long random string. |
+| `ALLOWED_EMAIL_DOMAIN` | Production | The Google Workspace domain staff sign in with, e.g. `yourschool.org`. Comma-separate several. Matched exactly, so `yourschool.org` doesn't admit `staff.yourschool.org` or `evilyourschool.org`. The server won't start in production without it; unset in development, any domain is accepted (a Teacher record is still required). |
+| `SCHOOL_TIME_ZONE` | No | IANA time zone of the school, e.g. `America/Chicago`. Decides what "today" is and the times on calendar invites. Default `America/New_York`. The server won't start with an invalid zone. |
 | `NODE_ENV` | Yes | `development` locally. Must be exactly `production` when deployed: that turns on secure, cross-site session cookies. |
 | `PORT` | No | Port the API listens on. Default `5000`. |
-| `DATABASE_URL` | Production | PostgreSQL connection string. When unset, the server uses SQLite at `server/database.db`. Set it as a real environment variable: it is read before `.env` is loaded. The connection requires SSL. |
+| `DATABASE_URL` | Production | PostgreSQL connection string. When unset, the server uses SQLite at `server/database.db`. |
+| `DB_SSL` | No | Set to `false` to connect to a Postgres that doesn't offer SSL (same machine or private network). SSL is on by default; the certificate isn't verified. |
 | `TRUST_PROXY` | No | Number of reverse-proxy hops to trust. Default `1`, which suits a single load balancer or platform edge. Leave it unset unless you know you need another value; it must be a whole number. |
 | `RUN_MIGRATION` | No | When `true`, the server runs `sequelize.sync({ alter: true })` to bring existing tables up to date with the models, then exits instead of serving. |
 | `REPORT_SERVICE_URL` | No | Base URL of the Excel report service. Without it, the admin download button reports that the service isn't configured. |
@@ -167,14 +170,14 @@ From the **Roster** tab you can then add the rest of your teachers and students,
 
 ## Adapting it to your school
 
-Several school-specific rules live in code rather than configuration. Review these before using the app anywhere new:
+The sign-in domain and time zone are environment variables (`ALLOWED_EMAIL_DOMAIN`, `SCHOOL_TIME_ZONE`; see [Configuration](#configuration)).
+
+School policy is moving into **school settings**, stored in the database and changed by admins through `PUT /api/admin/settings` (see [Settings](#settings)). The settings exist now, but the app doesn't read them yet; until it does, these rules are still set in code:
 
 | What | Where |
 | --- | --- |
-| Allowed Google sign-in domain | `server/config/passport.js` and `server/bootstrap-admin.js` (search for `@coderva.org`) |
 | Priority subject for each weekday | `getPrioritySubjectForDay` in `server/utils/tutoringQueries.js` (enforced) and `client/src/components/PriorityDatePicker.js` (shown in the date picker) |
 | Lunch block start and end times, used for calendar invites and service minutes | `server/utils/lunchTimes.js` |
-| School time zone, which decides what "today" means | `SCHOOL_TIME_ZONE` in `server/utils/tutoringScope.js` |
 | School year start (August 1), the default lower bound for date ranges | `schoolYearStartDate` in `server/utils/tutoringScope.js` |
 | Shared RRs: teachers who co-teach one RR, mapped to the teacher students are enrolled under | `RR_GROUPS` in `server/utils/tutoringScope.js`. Empty it (`{}`) if every RR has one teacher. |
 | Grade level, inferred from the first two digits of the student ID (the year they entered) | `gradeLevel` in `server/routes/admin.js` |
@@ -187,7 +190,7 @@ Subjects are free text on each teacher. For priority days to work, teachers' sub
 The app is three pieces: the API (`server/`), a static frontend (`client/build/`), and a PostgreSQL database. They can run on any platform that runs Node.js and serves static files.
 
 1. **Database** — provision PostgreSQL and set `DATABASE_URL` on the API. Tables are created automatically on first start. After pulling a release that adds model fields, deploy once with `RUN_MIGRATION=true` (the process exits after migrating), then remove it.
-2. **API** — run `npm start` in `server/` with `NODE_ENV=production`, `CLIENT_URL` set to the frontend's public URL, `CALLBACK_URL` set to `https://<api-host>/auth/google/callback`, and the other variables above.
+2. **API** — run `npm start` in `server/` with `NODE_ENV=production`, `ALLOWED_EMAIL_DOMAIN` set to your school's domain, `CLIENT_URL` set to the frontend's public URL, `CALLBACK_URL` set to `https://<api-host>/auth/google/callback`, and the other variables above.
 3. **Frontend** — run `npm run build` in `client/` with `REACT_APP_API_BASE_URL=https://<api-host>`, then serve `build/` as a single-page app (unknown paths must fall back to `index.html`). `client/Caddyfile` and `client/nixpacks.toml` are a working setup for serving it with Caddy.
 4. **Google OAuth** — add the production frontend origin and callback URL to your OAuth client.
 5. **First admin** — run `npm run admin:bootstrap` once against the production database (with `DATABASE_URL` set), as in [step 3](#3-create-your-first-admin).
@@ -211,6 +214,7 @@ Run these from `server/`.
 | `npm start` | Start the API. |
 | `npm run admin:bootstrap` | Create the first admin teacher from `ADMIN_*` environment variables. Safe to re-run. |
 | `npm run db:seed-dev` | **Destructive.** Delete the local SQLite database and refill it with sample data. |
+| `npm test` | Run the server's unit tests (Jest). |
 | `npm run db:reset-dev` | **Destructive.** Drop and recreate every table, empty. |
 
 Both destructive scripts ask you to type `RESET` first. If `DATABASE_URL` is set they refuse to run against PostgreSQL unless you also set `ALLOW_DESTRUCTIVE_RESET=yes`.
@@ -251,6 +255,8 @@ rr-tutoring-app/
 **Enrollment** — links a student to a teacher for one `period` label, with an optional `schoolYear`. A student can have any number of enrollments but at most one per period. Period `RR` is the student's homeroom; `SPED` is their case manager.
 
 **TutoringRequest** — one student booked with one teacher on one `date`, with a flag per lunch block (`lunchA`–`lunchD`). Also `status` (`active`, `cancelled` or `conflict`), `priority`, `conflictReason` (who overrode it, when cancelled by an override), attendance (`absent`, `absentMarkedAt`), and calendar tracking (`calendar_event_id`, `invite_sent`, `invite_sent_at`).
+
+**SchoolConfig** — one row per school setting that differs from its default: `key` and a JSON `value`. See [Settings](#settings).
 
 **Notification** — an in-app message to a teacher (`TeacherId` is the recipient) about a student (`StudentId`): `type`, `message`, `relatedDate`, `read`, `readAt`. Written when a priority override cancels a teacher's booking, the one case where the app takes away a session someone else scheduled. The overriding teacher is named in `message`, not stored as a separate key.
 
@@ -339,6 +345,26 @@ Teachers can read only their own analytics (`:teacherId` must be the caller); ad
 | --- | --- | --- |
 | GET | `/api/caseload` | The caller's SPED caseload: per student, sessions, absences and service minutes, in total, by subject and by tutoring teacher. Takes `from`, `to`. |
 | GET | `/api/caseload/students/:id/sessions` | Every session for one student on the caller's caseload. Takes `from`, `to`. `404` if the student isn't on it. |
+
+### Settings
+
+| Method | Path | Description |
+| --- | --- | --- |
+| GET | `/api/settings` | The school settings any signed-in teacher can read. |
+| GET | `/api/admin/settings` | Every setting. Admin. |
+| PUT | `/api/admin/settings` | Change settings: `{ "homeroomLabel": "Advisory" }`. Every value is validated before any is saved, and one bad value rejects the whole request with `400`. `null` resets a setting to its default. Admin. |
+
+| Setting | Default | Meaning |
+| --- | --- | --- |
+| `schoolName` | `""` | Shown in the app. |
+| `homeroomLabel` / `homeroomShortLabel` | `Raptor Rotation` / `RR` | What the school calls the homeroom period. |
+| `priorityByWeekday` | `{"1":"CS","2":"Math","4":"Humanities","5":"Science"}` | Weekday number (0 = Sunday) to the subject with priority. |
+| `noTutoringWeekdays` | `[0,3,6]` | Weekdays with no tutoring. |
+| `schoolYearStart` | `{"month":8,"day":1}` | First day of the school year, the default start of date ranges. |
+| `calendarEventPrefix` | `RR Tutoring` | Start of calendar invite titles. |
+| `gradeLevels` | `{"enabled":true,"labels":["9th","10th","11th","12th"]}` | Grade inferred from the first two digits of the student ID; `labels[0]` is the entry year. Admin only. |
+
+Settings are cached in memory by the server process and reloaded at startup.
 
 ### Admin
 

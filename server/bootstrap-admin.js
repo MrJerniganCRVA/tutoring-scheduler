@@ -6,12 +6,13 @@
 //
 // Usage (all required env vars):
 //   ADMIN_ID=1001 ADMIN_FIRST_NAME=Jane ADMIN_LAST_NAME=Doe \
-//   ADMIN_EMAIL=jane.doe@coderva.org ADMIN_SUBJECT=Math ADMIN_LUNCH=C \
+//   ADMIN_EMAIL=jane.doe@yourschool.org ADMIN_SUBJECT=Math ADMIN_LUNCH=C \
 //   node bootstrap-admin.js
 //
 // Against a deployed database, run it with that deployment's DATABASE_URL set.
 const sequelize = require('./config/db');
 const Teacher = require('./models/Teacher');
+const { isEmailAllowed, allowedEmailDomains } = require('./config/deployment');
 
 const required = ['ADMIN_ID', 'ADMIN_FIRST_NAME', 'ADMIN_LAST_NAME', 'ADMIN_EMAIL', 'ADMIN_SUBJECT', 'ADMIN_LUNCH'];
 const missing = required.filter(k => !process.env[k]);
@@ -29,8 +30,8 @@ async function main() {
     console.error('ADMIN_ID must be an integer.');
     process.exit(1);
   }
-  if (!email.endsWith('@coderva.org')) {
-    console.error('ADMIN_EMAIL must be a @coderva.org address - passport.js rejects any other domain at login.');
+  if (!isEmailAllowed(email)) {
+    console.error(`ADMIN_EMAIL must be on ALLOWED_EMAIL_DOMAIN (${allowedEmailDomains.join(', ')}) - sign-in rejects any other domain.`);
     process.exit(1);
   }
 

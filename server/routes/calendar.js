@@ -1,5 +1,6 @@
 const express = require('express');
 const { LUNCH_TIMES } = require('../utils/lunchTimes');
+const { schoolTimeZone } = require('../config/deployment');
 const router = express.Router();
 const auth = require('../middleware/auth');
 const { upsertCalendarEvent, parseEventIds, joinEventIds } = require('../utils/calendarService');
@@ -295,27 +296,39 @@ function getMergedTimeSlot(lunchPeriods, date) {
   const endTime = times[lastLunch].end;
 
   return {
-    start: toEasternISO(date, startTime),
-    end: toEasternISO(date, endTime)
+    start: toSchoolISO(date, startTime),
+    end: toSchoolISO(date, endTime)
   };
 }
-function toEasternISO(date, time) {
-  const dt = new Date(`${date}T${time}:00`);
-  const offset = getEasternOffset(dt);
-  // Use the original date/time strings directly — no locale formatting needed
-  return `${date}T${time}:00${offset}`;
+// 'YYYY-MM-DD' + 'HH:MM' wall-clock time in the school's zone, as an ISO
+// string with that zone's UTC offset on that date (DST-aware).
+function toSchoolISO(date, time) {
+  return `${date}T${time}:00${zoneOffset(date, time)}`;
 }
 
-function getEasternOffset(dt){
-  const formatter = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'America/New_York',
-    timeZoneName: 'shortOffset'
-  });
-  const parts = formatter.formatToParts(dt);
-  const offsetPart = parts.find(p => p.type === 'timeZoneName').value; // e.g. "GMT-4" or "GMT-5"
-  
-  const match = offsetPart.match(/GMT([+-]\d+)/);
-  const hours = parseInt(match[1]);
-  return hours >= 0 ? `+${String(hours).padStart(2, '0')}:00` : `-${String(Math.abs(hours)).padStart(2, '0')}:00`;
+// The school zone's UTC offset ("-05:00", "+05:30") at a wall-clock time.
+// Offsets are looked up at the instant the wall time would be in UTC and then
+// once more at the corrected instant, which lands on the right side of a DST
+// change for any time a school would schedule tutoring.
+function zoneOffset(date, time, timeZone = schoolTimeZone) {
+  const asUtc = new Date(`${date}T${time}:00Z`);
+  const first = offsetMinutesAt(asUtc, timeZone);
+  const minutes = offsetMinutesAt(new Date(asUtc.getTime() - first * 60000), timeZone);
+  const sign = minutes < 0 ? '-' : '+';
+  const abs = Math.abs(minutes);
+  return `${sign}${String(Math.floor(abs / 60)).padStart(2, '0')}:${String(abs % 60).padStart(2, '0')}`;
 }
+
+function offsetMinutesAt(instant, timeZone) {
+  const name = new Intl.DateTimeFormat('en-US', { timeZone, timeZoneName: 'shortOffset' })
+    .formatToParts(instant)
+    .find(p => p.type === 'timeZoneName').value; // "GMT", "GMT-5", "GMT+5:30"
+  const match = name.match(/GMT([+-])(\d{1,2})(?::(\d{2}))?/);
+  if (!match) return 0;
+  const total = Number(match[2]) * 60 + Number(match[3] || 0);
+  return match[1] === '-' ? -total : total;
+}
+
 module.exports = router;
+// Exported for tests.
+module.exports.zoneOffset = zoneOffset;

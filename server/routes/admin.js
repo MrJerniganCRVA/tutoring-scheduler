@@ -19,6 +19,7 @@ const {
   schoolTodayDateOnly,
   resolveRange
 } = require('../utils/tutoringScope');
+const schoolSettings = require('../utils/schoolSettings');
 
 // Everything in this file is mounted behind auth + requireAdmin in server.js.
 
@@ -330,6 +331,30 @@ router.get('/report', async (req, res) => {
     res.status(timedOut ? 504 : 502).json({
       msg: timedOut ? 'The report took too long to generate.' : 'Could not reach the report service.'
     });
+  }
+});
+
+// @route   GET api/admin/settings
+// @desc    Every school setting, including admin-only ones
+// @access  Admin
+router.get('/settings', (req, res) => {
+  res.json(schoolSettings.getAll());
+});
+
+// @route   PUT api/admin/settings
+// @desc    Change one or more settings: { "homeroomLabel": "Advisory", ... }.
+//          All values are validated before any is saved; null resets a
+//          setting to its default. Returns every setting after the change.
+// @access  Admin
+router.put('/settings', async (req, res) => {
+  try {
+    res.json(await schoolSettings.update(req.body));
+  } catch (err) {
+    if (err instanceof schoolSettings.SettingsError) {
+      return res.status(400).json({ msg: err.message });
+    }
+    console.error('Settings update failed:', err);
+    res.status(500).send('Server Error');
   }
 });
 

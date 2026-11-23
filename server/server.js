@@ -1,3 +1,4 @@
+require('./config/env');
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -7,7 +8,11 @@ const SequelizeStore = require('connect-session-sequelize')(session.Store);
 const sequelize = require('./config/db');
 const passport = require('passport');
 const { apiLimiter } = require('./middleware/rateLimiters');
-require('dotenv').config();
+// Validates ALLOWED_EMAIL_DOMAIN and SCHOOL_TIME_ZONE at boot, so a bad value
+// stops the server instead of failing at the first sign-in.
+require('./config/deployment');
+const schoolSettings = require('./utils/schoolSettings');
+require('./models/SchoolConfig');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -149,6 +154,7 @@ app.use('/api/tutoring', apiLimiter, require('./routes/tutoring'));
 app.use('/api/calendar', apiLimiter, require('./routes/calendar'));
 app.use('/api/notifications', apiLimiter, require('./routes/notifications'));
 app.use('/api/caseload', apiLimiter, require('./routes/caseload'));
+app.use('/api/settings', apiLimiter, require('./routes/settings'));
 app.use('/api/admin', apiLimiter, require('./middleware/auth'), require('./middleware/requireAdmin'), require('./routes/admin'));
 
 
@@ -171,7 +177,8 @@ if(runMigration){
 sequelize.authenticate()
   .then(() => {
     console.log('Database connected successfully');
-    sequelize.sync().then(()=>{
+    sequelize.sync().then(async ()=>{
+      await schoolSettings.reload();
       app.listen(PORT, () => console.log(`Server running on port:${PORT}`));
       console.log("Listening");
     })

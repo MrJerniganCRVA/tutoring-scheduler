@@ -8,7 +8,8 @@
     "db:seed-dev": "node init.js",
     "dev": "nodemon server.js",
     "db:reset-dev": "node migrate.js",
-    "admin:bootstrap": "node bootstrap-admin.js"
+    "admin:bootstrap": "node bootstrap-admin.js",
+    "test": "jest"
   },
   "keywords": [],
   "author": "Zach Jernigan <zachary.jernigan@coderva.org>",
@@ -32,6 +33,7 @@
     "sqlite3": "^5.1.7"
   },
   "devDependencies": {
+    "jest": "^29.7.0",
     "nodemon": "^3.1.10"
   }
 }

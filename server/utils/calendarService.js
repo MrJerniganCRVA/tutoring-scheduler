@@ -1,3 +1,4 @@
+const { schoolTimeZone } = require('../config/deployment');
 const { google } = require('googleapis');
 const Teacher = require('../models/Teacher');
 
@@ -60,11 +61,11 @@ async function upsertCalendarEvent(teacherId, eventDetails, existingEventId = nu
     description: eventDetails.description,
     start: {
       dateTime: eventDetails.startDateTime,
-      timeZone: 'America/New_York',
+      timeZone: schoolTimeZone,
     },
     end: {
       dateTime: eventDetails.endDateTime,
-      timeZone: 'America/New_York',
+      timeZone: schoolTimeZone,
     },
     attendees: eventDetails.attendees,
     reminders: {

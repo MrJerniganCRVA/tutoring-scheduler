@@ -1,5 +1,6 @@
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const Teacher = require('../models/Teacher')
+const { isEmailAllowed } = require('./deployment');
 
 module.exports = function(passport) {
     passport.use(
@@ -14,9 +15,9 @@ module.exports = function(passport) {
                 const email = emails[0].value;
                 
                 //check for correct user aka part of org
-                if(!email.endsWith('@coderva.org')){
+                if(!isEmailAllowed(email)){
                     return done(null, false, {
-                        message: 'Only CodeRVA emails can be used to access'
+                        message: 'Sign in with your school Google account'
                     });
                 }
 

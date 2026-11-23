@@ -1,19 +1,22 @@
 const sequelize = require('./config/db');
+const { confirmDestructiveReset } = require('./utils/destructiveGuard');
 
-// Import all models so Sequelize registers them before sync
-require('./models/SchoolConfig');
-require('./models/TutoringSlot');
-require('./models/Period');
-require('./models/Teacher');       // registers TeacherTutoringSlots join
-require('./models/Student');       // registers StudentTutoringSlots join
-require('./models/TutoringRequest'); // registers TutoringRequestSlots join
-require('./models/StudentPeriodAssignment'); // registers Student/Period/Teacher associations
+// Models must be required so Sequelize knows about them before sync() -
+// sync() only creates tables for models that have been registered on this
+// sequelize instance in the current process.
+require('./models/Teacher');
+require('./models/Student');
+require('./models/Enrollment');
+require('./models/TutoringRequest');
+require('./models/Notification');
 
 async function migrate(){
     try{
+        await confirmDestructiveReset('db:reset-dev (migrate.js)');
         console.log('Starting migration');
-        await sequelize.sync({ force: true });
+        await sequelize.sync({ force: true});
         console.log('Migration complete');
+        await sequelize.close();
         process.exit(0);
 
     } catch (e) {

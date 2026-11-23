@@ -1,161 +1,198 @@
-// init.js — seeds a fresh development database with generic placeholder data
+// init.js
+const { Sequelize, DataTypes } = require('sequelize');
 const path = require('path');
 const fs = require('fs');
+const sqlite3 = require('sqlite3').verbose();
+const { confirmDestructiveReset } = require('./utils/destructiveGuard');
 
-// Delete the existing SQLite database file if it exists
+// Define database path (must match the SQLite storage path in config/db.js)
 const dbPath = path.join(__dirname, 'database.db');
-if (fs.existsSync(dbPath)) {
-  console.log('Removing existing database...');
-  fs.unlinkSync(dbPath);
-}
 
-const sequelize = require('./config/db');
+const sequelize = require('./config/db')
 
-const SchoolConfig = require('./models/SchoolConfig');
-const TutoringSlot = require('./models/TutoringSlot');
-const Period = require('./models/Period');
+// Define models
 const Teacher = require('./models/Teacher');
 const Student = require('./models/Student');
+const Enrollment = require('./models/Enrollment');
 const TutoringRequest = require('./models/TutoringRequest');
-// Load StudentPeriodAssignment to register its associations
-require('./models/StudentPeriodAssignment');
 
+// Function to initialize database and add test data
 async function initDatabase() {
   try {
+    await confirmDestructiveReset('db:seed-dev (init.js)');
+
+    // Delete the existing database file if it exists
+    if (fs.existsSync(dbPath)) {
+      console.log('Removing existing database...');
+      fs.unlinkSync(dbPath);
+    }
+
+    // Sync models to create tables
     await sequelize.sync({ force: true });
     console.log('Database initialized successfully');
 
-    // -----------------------------------------------------------------------
-    // SchoolConfig defaults
-    // -----------------------------------------------------------------------
-    await SchoolConfig.bulkCreate([
-      { key: 'school_name',             value: 'Demo School' },
-      { key: 'allowed_email_domain',    value: null },           // null = allow any domain
-      { key: 'calendar_timezone',       value: 'America/New_York' },
-      { key: 'calendar_event_prefix',   value: 'Tutoring' },
-      { key: 'tutoring_period_name',    value: 'Tutoring Session' },
-      { key: 'no_tutoring_days',        value: JSON.stringify([0, 6]) }, // weekends only
-      { key: 'subject_priority_enabled',value: 'false' },
-      { key: 'subject_priority_map',    value: JSON.stringify({}) },
-      { key: 'require_slot_match',      value: 'true' }
-    ]);
-    console.log('SchoolConfig defaults seeded');
-
-    // -----------------------------------------------------------------------
-    // TutoringSlots — example lunch schedule; admins can edit/replace these
-    // -----------------------------------------------------------------------
-    const slots = await TutoringSlot.bulkCreate([
-      { name: 'A Lunch', order: 0, startTime: '11:02', endTime: '11:25' },
-      { name: 'B Lunch', order: 1, startTime: '11:28', endTime: '11:51' },
-      { name: 'C Lunch', order: 2, startTime: '11:54', endTime: '12:17' },
-      { name: 'D Lunch', order: 3, startTime: '12:20', endTime: '12:44' }
-    ]);
-    console.log('TutoringSlots seeded');
-
-    // -----------------------------------------------------------------------
-    // Periods — example 5-period day; admins can edit/replace these
-    // -----------------------------------------------------------------------
-    const periods = await Period.bulkCreate([
-      { name: 'Period 1', order: 0 },
-      { name: 'Period 2', order: 1 },
-      { name: 'Period 3', order: 2 },
-      { name: 'Period 4', order: 3 },
-      { name: 'Period 5', order: 4 }
-    ]);
-    console.log('Periods seeded');
-
-    // -----------------------------------------------------------------------
-    // Teachers
-    // -----------------------------------------------------------------------
+    // Create sample teachers
     const teachers = await Teacher.bulkCreate([
-      { id: 1,  first_name: 'Alice', last_name: 'Johnson',  email: 'ajohnson@school.edu',  subject: 'Math',       is_admin: true },
-      { id: 2,  first_name: 'Bob',   last_name: 'Smith',    email: 'bsmith@school.edu',    subject: 'Humanities', is_admin: false },
-      { id: 3,  first_name: 'Carol', last_name: 'Williams', email: 'cwilliams@school.edu', subject: 'Science',    is_admin: false },
-      { id: 4,  first_name: 'David', last_name: 'Locke',    email: 'dlocke@school.edu',    subject: 'CS',         is_admin: false }
+      {
+        id: 1,
+        first_name: 'Alice',
+        last_name:'Johnson',
+        email: 'ajohnson@school.edu',
+        subject: 'Math',
+        lunch: 'A'
+      },
+      {
+        id: 2,
+        first_name: 'Bob',
+        last_name: 'Smith',
+        email: 'bsmith@school.edu',
+        subject: 'Humanities',
+        lunch: 'B'
+      },
+      {
+        id: 3,
+        first_name: 'Carol',
+        last_name: 'Williams',
+        email: 'cwilliams@school.edu',
+        subject: 'Science',
+        lunch: 'C'
+      },
+      {
+        id: 4,
+        first_name: 'David',
+        last_name: 'Locke',
+        email: 'dlocke@school.edu',
+        subject: 'CS',
+        lunch: 'D'
+      }, {
+        // Change this email to your own Google account before seeding, or
+        // you won't be able to sign in to the sample data.
+        id:10015,
+        first_name: 'Demo',
+        last_name:'Admin',
+        email: 'demo.admin@coderva.org',
+        subject:'CS',
+        lunch: 'C',
+        is_admin: true
+      }
     ]);
-    console.log('Teachers seeded');
 
-    // Assign each teacher to slots that match their lunch availability
-    await teachers[0].setTutoringSlots([slots[0]]);           // Alice → A Lunch
-    await teachers[1].setTutoringSlots([slots[1]]);           // Bob   → B Lunch
-    await teachers[2].setTutoringSlots([slots[2]]);           // Carol → C Lunch
-    await teachers[3].setTutoringSlots([slots[3]]);           // David → D Lunch
+    console.log('Sample teachers created');
 
-    // -----------------------------------------------------------------------
-    // Students
-    // -----------------------------------------------------------------------
+    // Get the teacher IDs
+    const teacherIds = teachers.map(teacher => teacher.id);
+    
+    // Create sample students, then their teacher assignments as separate
+    // Enrollment rows (period -> teacher) rather than fixed FK columns.
+    const students = [];
+    const enrollmentsByPeriod = [];
+
+    const addStudentWithAssignments = (student, assignments) => {
+      students.push(student);
+      for (const [period, teacherId] of Object.entries(assignments)) {
+        if (teacherId) enrollmentsByPeriod.push({ StudentId: student.id, period, TeacherId: teacherId });
+      }
+    };
+
+    addStudentWithAssignments(
+      { id: 24000001, first_name: 'Testing', last_name: 'StudentA', email: 'test.studenta@students.coderva.org' },
+      { R1: 1, R2: 10015, RR: 10015, R4: 2, R5: 3 }
+    );
+    addStudentWithAssignments(
+      { id: 250000001, first_name: 'Test', last_name: 'StudentB', email: 'test.studentb@students.coderva.org' },
+      { R1: 2, R2: 10015, RR: 3, R4: 1, R5: 3 }
+    );
+
     const firstNames = ['Emma', 'Liam', 'Olivia', 'Noah', 'Ava', 'Ethan', 'Sophia', 'Lucas', 'Isabella', 'Mason'];
-    const lastNames  = ['Smith', 'Johnson', 'Brown', 'Davis', 'Wilson', 'Miller', 'Taylor', 'Anderson', 'Thomas', 'Jackson'];
+    const lastNames = ['Smith', 'Johnson', 'Brown', 'Davis', 'Wilson', 'Miller', 'Taylor', 'Anderson', 'Thomas', 'Jackson'];
 
-    const studentData = firstNames.map((firstName, i) => ({
-      id: 100000000 + i,
-      first_name: firstName,
-      last_name: lastNames[i],
-      email: `${firstName.toLowerCase()}.${lastNames[i].toLowerCase()}@student.school.edu`
-    }));
+    for (let i = 0; i < 10; i++) {
+      const firstName = firstNames[i % firstNames.length];
+      const lastName = lastNames[Math.floor(Math.random() * lastNames.length)];
+      const email = `${firstName.toLowerCase()}.${lastName.toLowerCase()}@students.coderva.org`;
 
-    const students = await Student.bulkCreate(studentData);
-    console.log('Students seeded');
-
-    // Assign each student to a slot (round-robin across the 4 slots)
-    for (let i = 0; i < students.length; i++) {
-      await students[i].setTutoringSlots([slots[i % slots.length]]);
+      // Randomly assign teachers - for simplicity, the same teacher may end
+      // up assigned to multiple periods sometimes.
+      addStudentWithAssignments(
+        { id: 100000000 + i, first_name: firstName, last_name: lastName, email },
+        {
+          R1: teacherIds[Math.floor(Math.random() * teacherIds.length)],
+          R2: teacherIds[Math.floor(Math.random() * teacherIds.length)],
+          RR: teacherIds[Math.floor(Math.random() * teacherIds.length)],
+          R4: teacherIds[Math.floor(Math.random() * teacherIds.length)],
+          R5: teacherIds[Math.floor(Math.random() * teacherIds.length)]
+        }
+      );
     }
 
-    // -----------------------------------------------------------------------
-    // StudentPeriodAssignments — each student gets a teacher per period
-    // -----------------------------------------------------------------------
-    const StudentPeriodAssignment = require('./models/StudentPeriodAssignment');
-    const assignments = [];
-    students.forEach(student => {
-      periods.forEach((period, idx) => {
-        assignments.push({
-          StudentId: student.id,
-          PeriodId: period.id,
-          TeacherId: teachers[idx % teachers.length].id
-        });
-      });
-    });
-    await StudentPeriodAssignment.bulkCreate(assignments);
-    console.log('StudentPeriodAssignments seeded');
+    await Student.bulkCreate(students);
+    await Enrollment.bulkCreate(enrollmentsByPeriod);
+    console.log('Sample students created');
 
-    // -----------------------------------------------------------------------
-    // TutoringRequests
-    // -----------------------------------------------------------------------
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    const formatDate = (d) => d.toISOString().split('T')[0];
-
-    const request = await TutoringRequest.create({
-      TeacherId: teachers[0].id,
-      StudentId: students[0].id,
+    // Create some sample tutoring requests
+    const allStudents = await Student.findAll();
+    
+    // Get today's date and format it for SQLite
+    const today = new Date();
+    const formattedDate = today.toISOString().split('T')[0];
+    
+    // Create a few sample tutoring requests
+    const requests = [];
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate()+1);
+    const formatDate = (date) => date.toISOString().split('T')[0];
+    requests.push({
+      TeacherId: 10015,
+      StudentId: 24000001,
       date: formatDate(tomorrow),
-      status: 'active',
+      lunchA: false,
+      lunchB: true,
+      lunchC: false,
+      lunchD: false,
+      status:'active',
       invite_sent: false
     });
-    await request.setTutoringSlots([slots[0]]);
-    console.log('Sample TutoringRequest seeded');
+    for (let i = 0; i < 5; i++) {
+      const student = allStudents[Math.floor(Math.random() * allStudents.length)];
+      const teacher = teachers[Math.floor(Math.random() * teachers.length)];
+      
+      requests.push({
+        TeacherId: teacher.id,
+        StudentId: student.id,
+        date: formattedDate,
+        lunchA: Math.random() > 0.5,
+        lunchB: Math.random() > 0.5,
+        lunchC: Math.random() > 0.5,
+        lunchD: Math.random() > 0.5,
+        status: 'active',
+        invite_sent: false
+      });
+    }
+    
+    await TutoringRequest.bulkCreate(requests);
+    console.log('Sample tutoring requests created');
 
-    // -----------------------------------------------------------------------
-    // Summary
-    // -----------------------------------------------------------------------
+    console.log('Database initialization completed successfully');
+    
+    // Display information about what was created
     console.log('\nDatabase Summary:');
     console.log('----------------');
-    console.log(`SchoolConfig entries: 9`);
-    console.log(`TutoringSlots:  ${slots.length}`);
-    console.log(`Periods:        ${periods.length}`);
-    console.log(`Teachers:       ${teachers.length}`);
-    console.log(`Students:       ${students.length}`);
-    console.log(`Assignments:    ${assignments.length}`);
-    console.log('\nTo customize this school\'s settings, use the admin panel or PUT /api/admin/config');
-
-    await sequelize.close();
-    console.log('Database connection closed');
-
+    console.log(`Teachers created: ${teachers.length}`);
+    console.log(`Students created: ${students.length}`);
+    console.log(`Tutoring requests created: ${requests.length}`);
+    console.log('\nTeacher details:');
+    teachers.forEach(teacher => {
+      console.log(`- ${teacher.last_name} (${teacher.subject}, Lunch ${teacher.lunch})`);
+    });
+    
+    // Close the database connection
+    await sequelize.close()
+    .then(()=>console.log("Database Closed"));
+    
   } catch (error) {
     console.error('Database initialization failed:', error);
-    process.exit(1);
   }
 }
 
+// Run the initialization
 initDatabase();

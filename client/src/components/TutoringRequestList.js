@@ -15,18 +15,27 @@ import {
   InputAdornment,
   Alert,
   IconButton,
-  Tooltip
+  Tooltip,
+  ToggleButton,
+  ToggleButtonGroup
 } from '@mui/material';
 import { Search as SearchIcon, CheckCircleOutline as CheckCircleOutlineIcon, Undo as UndoIcon } from '@mui/icons-material';
 import { format, parseISO } from 'date-fns';
 import {useTutoring} from '../contexts/TutoringContext';
+import { useAuth } from '../contexts/AuthContext';
+import { toDateOnly, todayDateOnly } from '../utils/dates';
 import CalendarInviteButton from './CalendarInviteButton';
+import AttendanceToggle from './AttendanceToggle';
 
 const TutoringRequestList = () => {
   const [filterDate, setFilterDate] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
-  
-  const teacherId = localStorage.getItem('teacherId');
+  // 'upcoming' = today and later; 'past' = earlier this school year, which is
+  // where a teacher catches up on attendance they didn't take on the day.
+  const [view, setView] = useState('upcoming');
+
+  const { currentUser } = useAuth();
+  const teacherId = currentUser?.id;
   const {sessions, error, cancelSession, markInviteSent, unmarkInviteSent} = useTutoring();
   const getFullName = (person) => {
     if (!person?.first_name || !person?.last_name) return '';
@@ -35,22 +44,17 @@ const TutoringRequestList = () => {
   const handleCancelRequest = async (requestId) => {
     cancelSession(requestId);
   };
-  
-  // Filter requests by date and search term as well as remove any non teacher requests
+
+  // sessions is already scoped to this teacher for the current school year, so
+  // the date/search filters below are all that's left. Searching still reaches
+  // back over the year; clearing it returns to the Upcoming/Past view.
   const filteredRequests = sessions.filter(request => {
     if(request.status==='cancelled'){
       return false;
     }
 
-    const requestTeacherName = getFullName(request.Teacher).toLowerCase();
-    const currentTeacherName = (localStorage.getItem('teacherName') || '').toLowerCase();
-
-    if(requestTeacherName !== currentTeacherName){
-      return false;
-    }
-
     if (filterDate) {
-      const selectedDate = filterDate.toISOString().split('T')[0];
+      const selectedDate = toDateOnly(filterDate);
       if (request.date !== selectedDate)
       {
         return false;
@@ -64,25 +68,32 @@ const TutoringRequestList = () => {
     }
 
     if(!filterDate && !searchTerm){
-      const today = new Date().toISOString().split('T')[0];
-      return request.date >= today;
+      return view === 'past'
+        ? request.date < todayDateOnly()
+        : request.date >= todayDateOnly();
     }
 
     return true;
   });
+  // Past sessions read newest first, so yesterday is at the top.
+  if (view === 'past' && !filterDate && !searchTerm) {
+    filteredRequests.reverse();
+  }
 
   // Helper function to format date
   const formatDate = (dateString) => {
     return format(parseISO(dateString), 'MMM dd, yyyy');
   };
   
-  // Helper function to show tutoring slot names
-  const getSlotNames = (request) => {
-    return (request.TutoringSlots || [])
-      .slice()
-      .sort((a, b) => a.order - b.order)
-      .map(s => s.name)
-      .join(', ');
+  // Helper function to show lunch periods
+  const getLunchPeriods = (request) => {
+    const periods = [];
+    if (request.lunchA) periods.push('A');
+    if (request.lunchB) periods.push('B');
+    if (request.lunchC) periods.push('C');
+    if (request.lunchD) periods.push('D');
+    
+    return periods.join(', ');
   };
   
   return (
@@ -91,7 +102,7 @@ const TutoringRequestList = () => {
       
       <Paper elevation={3} sx={{ p: 3 }}>
         <Typography variant="h5" component="h2" gutterBottom>
-          Tutoring Requests by {localStorage.getItem('teacherName')}
+          Tutoring Requests by {currentUser ? `${currentUser.firstName} ${currentUser.lastName}` : ''}
         </Typography>
         
         <Box sx={{ display: 'flex', mb: 3, gap: 2, alignItems:'center' }}>
@@ -110,6 +121,16 @@ const TutoringRequestList = () => {
             }}
             sx={{ flexGrow: 1 }}
           />
+          <ToggleButtonGroup
+            size="small"
+            exclusive
+            value={view}
+            onChange={(e, next) => { if (next) setView(next); }}
+            aria-label="Which sessions to show"
+          >
+            <ToggleButton value="upcoming">Upcoming</ToggleButton>
+            <ToggleButton value="past">Past</ToggleButton>
+          </ToggleButtonGroup>
           
           {/* <LocalizationProvider dateAdapter={AdapterDateFns}>
             <DatePicker
@@ -146,9 +167,10 @@ const TutoringRequestList = () => {
                 <TableRow>
                   <TableCell>Date</TableCell>
                   <TableCell>Student</TableCell>
-                  <TableCell>Tutoring Slots</TableCell>
+                  <TableCell>Lunch Periods</TableCell>
                   <TableCell>Status</TableCell>
                   <TableCell>Invite Status</TableCell>
+                  <TableCell>Attendance</TableCell>
                   <TableCell align="right">Cancel Event?</TableCell>
                 </TableRow>
               </TableHead>
@@ -157,7 +179,7 @@ const TutoringRequestList = () => {
                   <TableRow key={request.id}>
                     <TableCell>{formatDate(request.date)}</TableCell>
                     <TableCell>{getFullName(request.Student) || 'Unknown'}</TableCell>
-                    <TableCell>{getSlotNames(request)}</TableCell>
+                    <TableCell>{getLunchPeriods(request)}</TableCell>
                     <TableCell>
                       <Chip 
                         label={request.status} 
@@ -190,9 +212,12 @@ const TutoringRequestList = () => {
                         )}
                       </Box>
                     </TableCell>
+                    <TableCell>
+                      <AttendanceToggle request={request} />
+                    </TableCell>
                     <TableCell align="right">
                       {request.status === 'active' && 
-                       request.Teacher?.id === parseInt(teacherId) && (
+                       request.Teacher?.id === teacherId && (
                         <Button
                           variant="outlined"
                           color="error"

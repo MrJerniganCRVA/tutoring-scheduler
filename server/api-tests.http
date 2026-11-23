@@ -123,6 +123,7 @@ x-teacher-id: 4
 }
 
 ### 3C: David (CS, ID:4) confirms override - SHOULD SUCCESS AND CANCEL BOB'S REQUEST
+### Response should carry overrideInfo with notified:true and a calendarCleanup result.
 POST http://localhost:5000/api/tutoring
 Content-Type: application/json
 x-teacher-id: 4
@@ -133,6 +134,33 @@ x-teacher-id: 4
   "lunches": {"B": true, "A": false, "C": false, "D": false},
   "override": true
 }
+
+### 3D: Bob (the overridden teacher) should now have one unread notification
+### naming the student, David, and the CS priority day.
+GET http://localhost:5000/api/notifications
+x-teacher-id: 2
+
+### 3E: David (who did the overriding) should have none
+GET http://localhost:5000/api/notifications
+x-teacher-id: 4
+
+### 3F: Bob's cancelled request must not be re-invited. If he had already sent
+### invites before 3C, his calendar event no longer lists the student and this
+### must not put them back on it.
+POST http://localhost:5000/api/calendar/send-invites
+x-teacher-id: 2
+
+### 3G: ...and the cancelled request must not count as pending
+GET http://localhost:5000/api/calendar/pending-count
+x-teacher-id: 2
+
+### 3H: Mark Bob's notification read (use the id from 3D)
+PATCH http://localhost:5000/api/notifications/1/read
+x-teacher-id: 2
+
+### 3I: Only unread notifications - should be empty after 3H
+GET http://localhost:5000/api/notifications?unread=true
+x-teacher-id: 2
 
 ### ====== TEST 4: PRIORITY PROTECTION ======
 

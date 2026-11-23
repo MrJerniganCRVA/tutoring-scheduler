@@ -46,7 +46,7 @@ const Footer = () => {
                     </Box>
                     <Box sx={{textAlign:'center'}}>
                         <Typography variant="body2" sx={{opacity:0.8}}>
-                            &copy; 2025 Tutoring Scheduler v.{packageJson.version}
+                            &copy; 2026 RR Tutoring App v.{packageJson.version}
                         </Typography>
 
                     </Box>
